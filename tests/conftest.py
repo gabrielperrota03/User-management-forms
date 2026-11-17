@@ -28,10 +28,10 @@ def solicitacao(**extra):
 
 
 class SapFalso:
-    def __init__(self, usuarios: dict[str, UsuarioSap] | None = None, composites: dict[str, tuple[str, ...]] | None = None,
+    def __init__(self, usuarios: dict[str, UsuarioSap] | None = None, roles: dict[str, tuple[str, ...]] | None = None,
                  depois_da_primeira_leitura: dict[str, UsuarioSap] | None = None):
         self.usuarios = usuarios or {}
-        self.composites = composites or {}
+        self.roles = roles or {}
         self.depois = depois_da_primeira_leitura or {}
         self.lidos: list[str] = []
 
@@ -42,8 +42,8 @@ class SapFalso:
             return self.depois[igg]
         return self.usuarios.get(igg, UsuarioSap(existe=False))
 
-    def composites_por_transacao(self, t):
-        return self.composites.get(t, ())
+    def singles_por_transacao(self, t):
+        return self.roles.get(t, ())
 
 
 class GrcRiscoFalso:
@@ -52,11 +52,11 @@ class GrcRiscoFalso:
         self.falhar = falhar or set()
         self.simulados: list[tuple[str, str]] = []
 
-    def simular(self, usuario, composite):
-        self.simulados.append((usuario, composite))
-        if composite in self.falhar:
+    def simular(self, usuario, role):
+        self.simulados.append((usuario, role))
+        if role in self.falhar:
             raise RuntimeError("tela inesperada")
-        return self.riscos.get(composite, ())
+        return self.riscos.get(role, ())
 
 
 class GrcRequestFalso:

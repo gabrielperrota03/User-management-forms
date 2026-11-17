@@ -2,7 +2,7 @@ import itertools
 
 import pytest
 
-from gestao_usuarios.analise import Risco, ResultadoComposite, comparar, normalizar_nivel
+from gestao_usuarios.analise import Risco, ResultadoRole, comparar, normalizar_nivel
 from gestao_usuarios.decisao import (Acao, AcaoRequest, UsuarioSap, alvo_da_simulacao, decidir_entrada,
                                      decidir_request)
 
@@ -73,25 +73,25 @@ def test_comparar_ordena_e_marca_conflito(risco_alto):
     crit = Risco("C1", "x", "Critical")
     low = Risco("L1", "y", "Low")
     comp = comparar(("FB01", "FB02", "ME21N"), [
-        ResultadoComposite("FB01", "ZC_A", (crit,)),
-        ResultadoComposite("FB01", "ZC_B", (risco_alto, risco_alto)),
-        ResultadoComposite("FB01", "ZC_C", erro="falhou"),
-        ResultadoComposite("FB02", "ZC_D", ()),
+        ResultadoRole("FB01", "Y-BR-A", (crit,)),
+        ResultadoRole("FB01", "Y-BR-B", (risco_alto, risco_alto)),
+        ResultadoRole("FB01", "Y-BR-C", erro="falhou"),
+        ResultadoRole("FB02", "Y-BR-D", ()),
     ])
-    assert [r.composite for r in comp.por_transacao["FB01"]] == ["ZC_B", "ZC_A", "ZC_C"]
-    assert comp.recomendada("FB01").composite == "ZC_B"
+    assert [r.role for r in comp.por_transacao["FB01"]] == ["Y-BR-B", "Y-BR-A", "Y-BR-C"]
+    assert comp.recomendada("FB01").role == "Y-BR-B"
     assert comp.recomendada("ME21N") is None and comp.sem_role == ["ME21N"]
     assert comp.conflito and not comp.completo
     assert comp.por_transacao["FB01"][1].nivel_mais_grave == "Critical"
     assert comp.por_transacao["FB01"][1].contagem()["Critical"] == 1
 
-    so_low = comparar(("FB02",), [ResultadoComposite("FB02", "ZC_D", (low,))])
+    so_low = comparar(("FB02",), [ResultadoRole("FB02", "Y-BR-D", (low,))])
     assert so_low.conflito, "qualquer nível de risco é conflito"
-    sem_risco = comparar(("FB02",), [ResultadoComposite("FB02", "ZC_D", ())])
+    sem_risco = comparar(("FB02",), [ResultadoRole("FB02", "Y-BR-D", ())])
     assert not sem_risco.conflito and sem_risco.completo
 
 
 @pytest.mark.parametrize("erro", ["falhou"])
 def test_simulacao_com_erro_nao_e_recomendada(erro):
-    comp = comparar(("FB01",), [ResultadoComposite("FB01", "ZC_A", erro=erro)])
+    comp = comparar(("FB01",), [ResultadoRole("FB01", "Y-BR-A", erro=erro)])
     assert comp.recomendada("FB01") is None and not comp.conflito and not comp.completo

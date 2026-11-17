@@ -5,7 +5,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from .analise import Comparativo, ResultadoComposite, comparar
+from .analise import Comparativo, ResultadoRole, comparar
 from .decisao import Acao, AcaoRequest, UsuarioSap, alvo_da_simulacao, decidir_entrada, decidir_request
 from .erros import SessaoParada
 from .portas import FonteZbr, GrcRequest, GrcRisco, SapE1P
@@ -69,19 +69,19 @@ def processar(s: Solicitacao, *, regras: RegrasSeguranca, sap: SapE1P, grc_risco
         res.avisos.append(f"{s.igg} está bloqueado no E1P")
 
     res.alvo_simulacao = alvo_da_simulacao(s)
-    resultados: list[ResultadoComposite] = []
+    resultados: list[ResultadoRole] = []
     for t in s.transacoes:
-        for c in sap.composites_por_transacao(t):
+        for c in sap.singles_por_transacao(t):
             try:
-                resultados.append(ResultadoComposite(t, c, tuple(grc_risco.simular(res.alvo_simulacao, c))))
+                resultados.append(ResultadoRole(t, c, tuple(grc_risco.simular(res.alvo_simulacao, c))))
             except SessaoParada:
                 raise
             except Exception as e:  # noqa: BLE001 - uma simulação que falha não derruba as outras, mas não vale "sem risco"
                 log.exception("simulação de %s em %s falhou", c, res.alvo_simulacao)
-                resultados.append(ResultadoComposite(t, c, erro=str(e) or type(e).__name__))
+                resultados.append(ResultadoRole(t, c, erro=str(e) or type(e).__name__))
     res.comparativo = comparar(s.transacoes, resultados)
     for t in res.comparativo.sem_role:
-        res.avisos.append(f"nenhuma composite role dá acesso a {t}")
+        res.avisos.append(f"nenhuma single role dá acesso a {t}")
     if not res.comparativo.completo:
         res.avisos.append("alguma simulação falhou: análise incompleta")
 

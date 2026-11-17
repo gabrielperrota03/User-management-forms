@@ -16,17 +16,17 @@ Alguém preenche o Forms pedindo uma ou mais **transações** (ex.: `FB01`) para
 2. **Confere no E1P (somente leitura, SU01D)** se o usuário existe:
    - **Criação** e o usuário **já existe** no SAP → **não cria nada**, avisa no relatório (guarda de segurança).
    - **Modificação** e o usuário **não existe** → não analisa, avisa.
-3. **Descobre as composite roles** que dão cada transação: E1P › **SUIM › Roles › By Complex Selection Criteria**, filtrando
-   a transação e o tipo composite (somente leitura).
+3. **Descobre as single roles** que dão cada transação: E1P › **SUIM**, relatório de roles por valor de autorização,
+   objeto `S_TCODE` = transação (somente leitura). Caminho gravado pelo analista em 17/11/2026; detalhes em `suim.py`.
 4. **Análise de risco no GRC** (somente leitura): *Access Management › Access Risk Analysis › User Level* **com simulação**,
-   uma vez para cada composite candidata. Qualquer risco (Critical, High, Medium ou Low) conta como **conflito**.
+   uma vez para cada single role candidata. Qualquer risco (Critical, High, Medium ou Low) conta como **conflito**.
 5. **Compara** as candidatas (qual tem menos riscos, qual é a mais grave) e monta o relatório.
 6. **Criação apenas:** cria no GRC a request de criação do usuário (`New or Change Account`) com o **ZBR do usuário de referência**.
 7. **Relatório HTML** com o resultado e os **prints anexados**; aviso de conflito no assunto. Um fluxo do Power Automate envia
    o email para o analista (com CC fixo).
 
 ### O que é o ZBR
-Cada usuário é atrelado a um **ZBR** (business role, ex.: `ZBRCOORD`). As composite roles são incluídas no ZBR, não no
+Cada usuário é atrelado a um **ZBR** (business role, ex.: `ZBRCOORD`). As roles são incluídas no ZBR, não no
 usuário, e valem para todos que têm aquele ZBR. Na criação, o novo usuário recebe o **mesmo ZBR do usuário de referência**.
 O ZBR **não é legível no E1P**: só no **O97** (GRC, `001 - O97 : GRC : Production`), no report de favoritos
 *User x Business Roles Report*. Por isso há uma **lista semanal** de usuários ativos e seus ZBRs (seção 6).
@@ -81,23 +81,23 @@ analista, então o disparo é local:
 | 3 | SU01D no E1P: existe? bloqueado? | — |
 | 4 | Regra de existência (Criação × Modificação). Divergiu → aviso, final | `AVISO` |
 | 5 | Criação: ZBR do usuário de referência pela lista (seção 6). Sem ZBR → aviso, final | `AVISO` |
-| 6 | SUIM: composites por transação. Transação sem composite → entra no relatório como "sem role" | — |
-| 7 | GRC: simulação para cada composite candidata (export Excel + prints) | `ANALISADA` |
+| 6 | SUIM: single roles por transação. Transação sem single role → entra no relatório como "sem role" | — |
+| 7 | GRC: simulação para cada single role candidata (export Excel + prints) | `ANALISADA` |
 | 8 | Criação: request no GRC (seção 7) | `REQUEST_CRIADA` |
 | 9 | Relatório gravado | `CONCLUIDA` |
 
 A decisão (etapas 2, 4, 5 e 8) é uma **função pura** em `decisao.py`: entradas → ação. Não toca em SAP, GRC nem disco.
 
 ### Em qual usuário a simulação roda
-- **Modificação:** no **IGG do usuário** (acesso atual + composite candidata).
+- **Modificação:** no **IGG do usuário** (acesso atual + single role candidata).
 - **Criação:** o IGG ainda não existe no SAP, então a simulação roda no **usuário de referência** (mesmo ZBR que o novo
-  usuário receberá) + composite candidata. **[A confirmar com o analista]**
+  usuário receberá) + single role candidata. **[A confirmar com o analista]**
 
 ---
 
-## 5. Comparação das composites (`analise.py`)
+## 5. Comparação das single roles (`analise.py`)
 
-Para cada transação, cada composite candidata recebe:
+Para cada transação, cada single role candidata recebe:
 
 - total de riscos e contagem por nível (Critical, High, Medium, Low);
 - o nível mais grave;
@@ -130,7 +130,7 @@ Só quando **tipo = Criação** e o usuário **não existe** no E1P (conferido n
 - **Dry-run é o padrão**: sem `--executar` nada é criado (o relatório mostra "criaria").
 - Disjuntor `--max-requests` (padrão 3 por rodada).
 - **Com conflito de risco: não cria a request**, avisa. **[A confirmar com o analista]**
-- As composites pedidas entram na mesma request? **[A confirmar]** Hoje: não; a request só cria o usuário com o ZBR.
+- As single roles pedidas entram na mesma request? **[A confirmar]** Hoje: não; a request só cria o usuário com o ZBR.
 
 ---
 
@@ -169,12 +169,14 @@ Na dúvida a aplicação **não age**: vira aviso no relatório e um humano deci
 | `resposta.py` | Lê o JSON do Power Automate → `Solicitacao` | pronto |
 | `seguranca.py` | Guardas da seção 8 (funções puras) | pronto |
 | `decisao.py` | Regras da seção 4 (função pura) | pronto |
-| `analise.py` | Comparação das composites (seção 5) | pronto |
+| `analise.py` | Comparação das single roles (seção 5) | pronto |
 | `zbr.py` | Lista de ZBR, idade, consulta | pronto |
 | `manifesto.py` | Estado por solicitação em JSON | pronto |
 | `processador.py` | Orquestra uma solicitação pelas portas | pronto (testado com simuladores) |
 | `portas.py` | Interfaces `SapE1P`, `GrcRisco`, `GrcRequest`, `FonteZbr` | pronto |
-| `sap_e1p.py` | SU01D + SUIM no E1P (SAP GUI Scripting) | a fazer (mapear ao vivo) |
+| `sap_gui.py` | Sessão própria por sistema (E1P/O97), leitura de ALV e popups | pronto (não testado ao vivo) |
+| `suim.py` | SUIM: transação → roles (caminho gravado + conferências de título, programa e popup) | validado ao vivo (FB01, 17/11/2026) |
+| `sap_e1p.py` | SU01D no E1P (portar do lock-users) | a fazer |
 | `sap_o97.py` | *User x Business Roles Report* | a fazer (mapear ao vivo) |
 | `grc.py` | Risk Analysis com simulação + request de criação (Playwright/CDP) | a fazer (mapear ao vivo) |
 | `relatorio.py` | HTML + prints | a fazer |
@@ -186,7 +188,12 @@ Na dúvida a aplicação **não age**: vira aviso no relatório e um humano deci
 
 1. Na criação, a simulação roda no usuário de referência? (seção 4)
 2. Com conflito, a request de criação é bloqueada? (seção 7)
-3. As composites pedidas entram na request de criação? (seção 7)
+3. As single roles pedidas entram na request de criação? (seção 7)
 4. Campos da request `New or Change Account` e onde o ZBR entra nela (mapear ao vivo).
-5. Telas do SUIM *By Complex Selection Criteria*, do *User x Business Roles Report* (O97) e da simulação no Risk Analysis
-   (mapear ao vivo, com prints).
+5. Telas do *User x Business Roles Report* (O97) e da simulação no Risk Analysis (mapear ao vivo, com prints).
+6. **SUIM** validada ao vivo em 17/11/2026 (FB01, E1P/010): *Roles by Complex Selection Criteria* (RSUSR070) com
+   `S_TCODE` = FB01 devolve 10 single roles (ex.: `Y-BRF-FB01-POST_DOCUMENT`). A análise usa as **single roles**
+   (decisão do analista, 17/11/2026); composite que aparecer é ignorada com aviso.
+7. **Roles ocultas.** O popup do F8 avisa *"523 roles with missing authorization not displayed"*: o usuário que roda não
+   enxerga todas as roles, e o resultado pode estar incompleto. Hoje vira aviso no relatório; decidir se basta ou se a rotina
+   deve rodar com outro usuário/autorização.

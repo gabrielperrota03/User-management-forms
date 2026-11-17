@@ -26,6 +26,22 @@ zbr:
   prefixo: 'ZBR'
   idade_max_dias: 8                  # lista semanal + folga; mais velha que isso = consulta o O97 para o IGG
 
+# E1P › SUIM › Roles by Complex Selection Criteria (gravação do analista e inspeção ao vivo, 17/11/2026).
+suim:
+  arvore: 'wnd[0]/usr/cntlTREE_CONTROL_CONTAINER/shellcont/shell'
+  nos_expandir: ['02  1      3', '03  2      1']
+  no_relatorio: '04  2      2'
+  titulo_selecao: 'Roles by Complex Selection Criteria'
+  programa: 'RSUSR070'             # transação S_BCE_68001425
+  campo_objeto: 'wnd[0]/usr/ctxtOBJ1'
+  objeto: 'S_TCODE'
+  campo_valor: 'wnd[0]/usr/txtVAL101'
+  grade: 'wnd[0]/usr/cntlGRID1/shellcont/shell/shellcont[1]/shell'
+  coluna_role: 'AGR_NAME'
+  coluna_tipo: 'TYPE_ICON'         # '@IC\QSin...' = single
+  coluna_descricao: 'AGR_TEXT'
+  popups_permitidos: ['roles with missing authorization not']   # 'Information: N roles ... not displayed'
+
 request:
   max_por_rodada: 3                  # disjuntor
   bloquear_com_conflito: true        # a confirmar com o analista

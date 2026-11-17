@@ -16,8 +16,8 @@ class SapE1P(Protocol):
     def usuario(self, igg: str) -> "UsuarioSap":
         """SU01D (somente leitura): existe? bloqueado?"""
 
-    def composites_por_transacao(self, transacao: str) -> tuple[str, ...]:
-        """SUIM › Roles › By Complex Selection Criteria, transação + tipo composite (somente leitura)."""
+    def singles_por_transacao(self, transacao: str) -> tuple[str, ...]:
+        """SUIM › Roles by Complex Selection Criteria, S_TCODE = transação: single roles (somente leitura)."""
 
 
 class FonteZbr(Protocol):
@@ -26,8 +26,8 @@ class FonteZbr(Protocol):
 
 
 class GrcRisco(Protocol):
-    def simular(self, usuario: str, composite: str) -> tuple["Risco", ...]:
-        """Access Risk Analysis › User Level com simulação do usuário + composite. Nada é salvo no GRC."""
+    def simular(self, usuario: str, role: str) -> tuple["Risco", ...]:
+        """Access Risk Analysis › User Level com simulação do usuário + single role. Nada é salvo no GRC."""
 
 
 class GrcRequest(Protocol):

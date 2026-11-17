@@ -1,4 +1,4 @@
-"""Comparação das composite roles candidatas (docs/ARQUITETURA.md, seção 5). Funções puras.
+"""Comparação das single roles candidatas (docs/ARQUITETURA.md, seção 5). Funções puras.
 
 Conflito = qualquer risco, em qualquer nível. Nível desconhecido conta como o mais grave (falha para o lado seguro).
 Simulação que falhou não é "sem risco": deixa a análise incompleta, e a request de criação não sai.
@@ -23,9 +23,9 @@ class Risco:
 
 
 @dataclass(frozen=True)
-class ResultadoComposite:
+class ResultadoRole:
     transacao: str
-    composite: str
+    role: str
     riscos: tuple[Risco, ...] = ()
     erro: str | None = None
 
@@ -43,12 +43,12 @@ class ResultadoComposite:
     def chave_ordem(self) -> tuple:
         c = self.contagem()
         # erro vai para o fim: sem resultado, não pode ser recomendada
-        return (self.erro is not None, *(c[n] for n in NIVEIS), len(self.riscos), self.composite)
+        return (self.erro is not None, *(c[n] for n in NIVEIS), len(self.riscos), self.role)
 
 
 @dataclass
 class Comparativo:
-    por_transacao: dict[str, list[ResultadoComposite]] = field(default_factory=dict)
+    por_transacao: dict[str, list[ResultadoRole]] = field(default_factory=dict)
 
     @property
     def sem_role(self) -> list[str]:
@@ -62,16 +62,16 @@ class Comparativo:
     def completo(self) -> bool:
         return not any(r.erro for lista in self.por_transacao.values() for r in lista)
 
-    def recomendada(self, transacao: str) -> ResultadoComposite | None:
+    def recomendada(self, transacao: str) -> ResultadoRole | None:
         lista = [r for r in self.por_transacao.get(transacao, []) if r.erro is None]
         return lista[0] if lista else None
 
 
-def comparar(transacoes: tuple[str, ...], resultados: list[ResultadoComposite]) -> Comparativo:
+def comparar(transacoes: tuple[str, ...], resultados: list[ResultadoRole]) -> Comparativo:
     """Agrupa por transação (na ordem pedida) e ordena as candidatas da menos para a mais arriscada."""
     comp = Comparativo({t: [] for t in transacoes})
     for r in resultados:
         comp.por_transacao.setdefault(r.transacao, []).append(r)
     for lista in comp.por_transacao.values():
-        lista.sort(key=ResultadoComposite.chave_ordem)
+        lista.sort(key=ResultadoRole.chave_ordem)
     return comp
