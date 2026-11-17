@@ -7,7 +7,7 @@ sap:
   sistema_grc: 'E1PCLNT010'
 
 grc:
-  url: ''                            # NWBC do GRC (mesmo do lock-users; preencher no local)
+  url: 'https://sapo97.main.glb.corp.local:8401/ui2/nwbc/?sap-client=960&sap-language=EN&sap-nwbc-node=root&sap-theme=sap_corbu'
   cdp: 'http://127.0.0.1:9222'       # Chromium dedicado com --remote-debugging-port
   functional_area: 'EP- BRAZIL'
   user_group: 'BR-TEP'
@@ -41,6 +41,15 @@ suim:
   coluna_tipo: 'TYPE_ICON'         # '@IC\QSin...' = single
   coluna_descricao: 'AGR_TEXT'
   popups_permitidos: ['roles with missing authorization not']   # 'Information: N roles ... not displayed'
+
+# GRC › Access Management › User Level Simulation (mapeado ao vivo em 17/11/2026). Rule Set é regra do analista: sempre este.
+grc_risco:
+  rule_set: 'EP - SOD 2019'
+  somente_simulacao: true          # caixa 'Risk from Simulation only': só os riscos que a role traz
+  sistema_criterio: 'E1PCLNT010'
+  sistema_simulacao: 'E1P client 010 - Unisol'
+  tipo_role: 'Technical Role'
+  acao: 'Include'
 
 request:
   max_por_rodada: 3                  # disjuntor
