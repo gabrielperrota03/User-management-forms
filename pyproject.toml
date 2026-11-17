@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gestao-usuarios"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = ["pyyaml", "pywin32", "playwright", "pillow"]
+
+[project.scripts]
+gestao-usuarios = "gestao_usuarios.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

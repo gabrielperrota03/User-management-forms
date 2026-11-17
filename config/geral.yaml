@@ -1,0 +1,36 @@
+# Configuração versionada (sem segredos e sem nada de uma pessoa ou máquina).
+# Por máquina: config/geral.local.yaml (fora do git) sobrescreve só as chaves que trouxer.
+
+sap:
+  conexao_e1p: 'E1P'                 # entrada do SAP Logon (a confirmar)
+  conexao_o97: '001 - O97 : GRC : Production'
+  sistema_grc: 'E1PCLNT010'
+
+grc:
+  url: ''                            # NWBC do GRC (mesmo do lock-users; preencher no local)
+  cdp: 'http://127.0.0.1:9222'       # Chromium dedicado com --remote-debugging-port
+  functional_area: 'EP- BRAZIL'
+  user_group: 'BR-TEP'
+
+pastas:
+  insumos: '%OneDriveCommercial%\TEPBR-FINANCE - 1 - SOX\Insumos - Automação'
+  solicitacoes: '%OneDriveCommercial%\TEPBR-FINANCE - 1 - SOX\Insumos - Automação\Solicitacoes de Acesso'
+  estado: '%OneDriveCommercial%\TEPBR-FINANCE - 1 - SOX\Insumos - Automação\Gestao Usuarios\estado.json'
+  lista_zbr: '%OneDriveCommercial%\TEPBR-FINANCE - 1 - SOX\Insumos - Automação\Gestao Usuarios\zbr_usuarios.json'
+  relatorios: '%OneDriveCommercial%\TEPBR-FINANCE - 1 - SOX\Insumos - Automação\Relatorios Gestao Usuarios'
+
+vigia:
+  intervalo_s: 30
+
+zbr:
+  prefixo: 'ZBR'
+  idade_max_dias: 8                  # lista semanal + folga; mais velha que isso = consulta o O97 para o IGG
+
+request:
+  max_por_rodada: 3                  # disjuntor
+  bloquear_com_conflito: true        # a confirmar com o analista
+
+seguranca:
+  dominios_permitidos: ['totalenergies.com', 'external.totalenergies.com']
+  igg_protegidos: []                 # preencher no geral.local.yaml (ex.: o IGG de quem opera a rotina)
+  max_transacoes: 10
