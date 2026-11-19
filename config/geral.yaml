@@ -2,7 +2,7 @@
 # Por máquina: config/geral.local.yaml (fora do git) sobrescreve só as chaves que trouxer.
 
 sap:
-  conexao_e1p: 'E1P'                 # entrada do SAP Logon (a confirmar)
+  conexao_e1p: '08 - UNISOL V2 - ECC - PRD - E1P'   # entrada do SAP Logon (a mesma do lock-users)
   conexao_o97: '001 - O97 : GRC : Production'
   sistema_grc: 'E1PCLNT010'
 

@@ -24,6 +24,8 @@ Alguém preenche o Forms pedindo uma ou mais **transações** (ex.: `FB01`) para
    FB01 isso tirou o CIT01_EP, que vinha de SE16N/SM35 do próprio usuário). O resultado é lido nos dois tipos
    (*Critical Action* e *Permission Level*). Qualquer risco (Critical, High, Medium ou Low) conta como **conflito**.
    Caminho mapeado ao vivo em 17/11/2026; detalhes em `grc_risco.py`.
+   O resultado é lido tela a tela (10 linhas por tela, número absoluto no atributo `rr` das linhas) até ter 1..total sem
+   buraco, com um print por tela; sem conseguir ler tudo, a análise fica incompleta e nenhuma request sai.
 5. **Compara** as candidatas (qual tem menos riscos, qual é a mais grave) e monta o relatório.
 6. **Criação apenas:** cria no GRC a request de criação do usuário (`New or Change Account`) com o **ZBR do usuário de referência**.
 7. **Relatório HTML** com o resultado e os **prints anexados**; aviso de conflito no assunto. Um fluxo do Power Automate envia
@@ -182,7 +184,7 @@ Na dúvida a aplicação **não age**: vira aviso no relatório e um humano deci
 | `suim.py` | SUIM: transação → roles (caminho gravado + conferências de título, programa e popup) | validado ao vivo (FB01, 17/11/2026) |
 | `sap_e1p.py` | SU01D no E1P (portar do lock-users) | a fazer |
 | `sap_o97.py` | *User x Business Roles Report* | a fazer (mapear ao vivo) |
-| `wd.py` | Web Dynpro do GRC: botões (com lista de proibidos), combos, critérios, leitura de tabela | pronto |
+| `wd.py` | Web Dynpro do GRC: botões (com lista de proibidos), combos, critérios, leitura de tabela paginada | paginação validada ao vivo (139 linhas, 19/11/2026) |
 | `grc_risco.py` | User Level Simulation (Rule Set `EP - SOD 2019`), leitura de Critical Action e Permission Level | validado ao vivo (L1170904 + `Y-BRF-FB01-POST_DOCUMENT`, 17/11/2026) |
 | `grc_request.py` | Request de criação `New or Change Account` (Playwright/CDP) | a fazer (mapear ao vivo) |
 | `relatorio.py` | HTML + prints | a fazer |
@@ -203,5 +205,3 @@ Na dúvida a aplicação **não age**: vira aviso no relatório e um humano deci
 7. **Roles ocultas.** O popup do F8 avisa *"523 roles with missing authorization not displayed"*: o usuário que roda não
    enxerga todas as roles, e o resultado pode estar incompleto. Hoje vira aviso no relatório; decidir se basta ou se a rotina
    deve rodar com outro usuário/autorização.
-8. **Resultado com mais de 10 linhas** por tipo: a grade mostra 10 por tela e a paginação ainda não foi feita. Hoje a
-   simulação para (análise incompleta, sem request), em vez de fingir que leu tudo.

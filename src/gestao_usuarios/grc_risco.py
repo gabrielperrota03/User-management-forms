@@ -67,11 +67,11 @@ def riscos_das_linhas(linhas: list[dict[str, str]], tipo: str) -> tuple[Risco, .
 
 
 def conferir_total(total: int | None, lidas: int, tipo: str) -> None:
-    """A grade mostra 10 linhas por tela; mais que isso ainda não é paginado: não finge que leu tudo."""
+    """Segunda conferência depois da paginação (wd.ler_tabela): lidas tem de bater com o total. Não finge que leu tudo."""
     if total is None:
         raise TelaInesperada(f"total de linhas do resultado ({tipo}) não identificado")
-    if total > lidas:
-        raise TelaInesperada(f"resultado ({tipo}) tem {total} linhas e só {lidas} estão na tela (paginação a fazer)")
+    if total != lidas:
+        raise TelaInesperada(f"resultado ({tipo}) tem {total} linhas e foram lidas {lidas}")
 
 
 def juntar(por_tipo: dict[str, tuple[Risco, ...]]) -> tuple[Risco, ...]:
@@ -206,14 +206,18 @@ def simular(contexto, c: ConfigGrcRisco, usuario: str, role: str, pasta_prints: 
         por_tipo: dict[str, tuple[Risco, ...]] = {}
         for tipo in wd.textos_do_combo(frame, combo):
             wd.escolher(janela, frame, combo, tipo)
-            t = wd.ler_tabela(frame, COL_RISCO)
+
+            def tirar_print(tela: int, tipo=tipo) -> None:
+                if pasta_prints is None:
+                    return
+                pasta_prints.mkdir(parents=True, exist_ok=True)
+                nome = f"grc_{usuario}_{re.sub(r'[^A-Za-z0-9_-]', '_', role)}_{tipo.replace(' ', '_')}_{tela + 1:02d}.png"
+                janela.screenshot(path=str(pasta_prints / nome))
+                prints.append(pasta_prints / nome)
+
+            t = wd.ler_tabela(janela, frame, COL_RISCO, ao_mostrar=tirar_print)
             conferir_total(t["total"], len(t["linhas"]), tipo)
             por_tipo[tipo] = riscos_das_linhas(t["linhas"], tipo)
-            if pasta_prints is not None:
-                pasta_prints.mkdir(parents=True, exist_ok=True)
-                destino = pasta_prints / f"grc_{usuario}_{re.sub(r'[^A-Za-z0-9_-]', '_', role)}_{tipo.replace(' ', '_')}.png"
-                janela.screenshot(path=str(destino))
-                prints.append(destino)
         if not por_tipo:
             raise TelaInesperada("o combo Type do resultado não tem opções")
         return por_tipo, prints

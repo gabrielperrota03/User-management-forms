@@ -34,7 +34,7 @@ def test_linha_sem_id_e_sem_no_violations_e_tela_desconhecida():
 def test_total_maior_que_a_tela_nao_vale_como_lido():
     conferir_total(1, 1, "x")
     conferir_total(0, 0, "x")
-    with pytest.raises(TelaInesperada, match="paginação"):
+    with pytest.raises(TelaInesperada, match="foram lidas 10"):
         conferir_total(14, 10, "Permission Level")
     with pytest.raises(TelaInesperada, match="não identificado"):
         conferir_total(None, 1, "x")
