@@ -51,6 +51,13 @@ grc_risco:
   tipo_role: 'Technical Role'
   acao: 'Include'
 
+# O97 › User x Business Roles Report (mapeado ao vivo em 19/11/2026). A filial é só a BR-TEP; o connector tira as roles de BW.
+o97:
+  transacao: 'Z_USER_BR'
+  programa: 'AQZZZGRCREPORTS=Z_USER_BR'
+  user_group: 'BR-TEP'
+  connector: 'E1PCLNT010'
+
 request:
   max_por_rodada: 3                  # disjuntor
   bloquear_com_conflito: true        # a confirmar com o analista

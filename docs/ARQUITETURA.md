@@ -114,14 +114,23 @@ em qualquer candidata; o assunto do email ganha `CONFLITO`. A aplicação **reco
 
 ---
 
-## 6. Lista de ZBR (`zbr.py`)
+## 6. Lista de ZBR (`zbr.py`, `sap_o97.py`)
 
-- **Tarefa semanal** (`python -m gestao_usuarios atualizar-zbr`): O97 › *User x Business Roles Report* para todos os usuários
-  ativos → `Insumos - Automação/Gestao Usuarios/zbr_usuarios.json` (`{"gerado_em": ..., "usuarios": {"L1234567": ["ZBRCOORD"]}}`).
+- **Fonte:** O97 › *User x Business Roles Report* (transação `Z_USER_BR`, SAP Query `AQZZZGRCREPORTS=Z_USER_BR`), sempre com
+  **User Group = BR-TEP** (a filial é só a BR-TEP, regra do analista de 19/11/2026) e **Connector Id = E1PCLNT010**. Sem o
+  connector, o usuário traz também as business roles de BW (ex.: ZBRCO_KEYUSER, ZBR_COORD); com ele, sobra o ZBR do E1P.
+  A última linha da grade é a de totais do ALV e é ignorada. Mapeado e validado ao vivo em 19/11/2026.
+- **Atualização semanal:** tarefa do Windows **`GestaoUsuarios-Lista-ZBR`, segundas às 08:00** (escolha do analista,
+  19/11/2026), registrada por `scripts/agendar_zbr.ps1` e lançada por `scripts/rodar_zbr.cmd` (log em `logs/tarefa_zbr.log`;
+  só com o usuário logado e a tela desbloqueada; PC desligado no horário = roda assim que der). Ela executa
+  `scripts/atualizar_zbr.py`: o report para todos da BR-TEP (229 usuários, 1 ZBR cada, ~9 s) →
+  `Insumos - Automação/Gestao Usuarios/zbr_usuarios.json` (`{"gerado_em": ..., "usuarios": {"L1234567": ["ZBRCOORD"]}}`).
+  Só ZBR vigente hoje (Valid From ≤ hoje ≤ Valid To). A lista nova só substitui a atual se não encolheu mais de 20%
+  (extração vazia ou filtrada por engano não apaga a lista boa).
 - Na criação, o ZBR vem dessa lista pelo IGG do usuário de referência.
 - **Fallback:** se o IGG não está na lista (entrou depois da última atualização) ou a lista tem mais de `zbr.idade_max_dias`
   (padrão 8), roda o mesmo report só para aquele IGG.
-- Mais de um ZBR para o mesmo IGG → aviso, sem request (um humano escolhe).
+- Mais de um ZBR para o mesmo IGG → aviso, sem request (um humano escolhe). Na extração de 19/11/2026 não houve nenhum caso.
 
 ---
 
@@ -183,7 +192,7 @@ Na dúvida a aplicação **não age**: vira aviso no relatório e um humano deci
 | `sap_gui.py` | Sessão própria por sistema (E1P/O97), leitura de ALV e popups | pronto (não testado ao vivo) |
 | `suim.py` | SUIM: transação → roles (caminho gravado + conferências de título, programa e popup) | validado ao vivo (FB01, 17/11/2026) |
 | `sap_e1p.py` | SU01D no E1P (portar do lock-users) | a fazer |
-| `sap_o97.py` | *User x Business Roles Report* | a fazer (mapear ao vivo) |
+| `sap_o97.py` | *User x Business Roles Report*: um IGG (fallback) e a extração semanal da BR-TEP | validado ao vivo (19/11/2026) |
 | `wd.py` | Web Dynpro do GRC: botões (com lista de proibidos), combos, critérios, leitura de tabela paginada | paginação validada ao vivo (139 linhas, 19/11/2026) |
 | `grc_risco.py` | User Level Simulation (Rule Set `EP - SOD 2019`), leitura de Critical Action e Permission Level | validado ao vivo (L1170904 + `Y-BRF-FB01-POST_DOCUMENT`, 17/11/2026) |
 | `grc_request.py` | Request de criação `New or Change Account` (Playwright/CDP) | a fazer (mapear ao vivo) |
@@ -198,7 +207,8 @@ Na dúvida a aplicação **não age**: vira aviso no relatório e um humano deci
 2. Com conflito, a request de criação é bloqueada? (seção 7)
 3. As single roles pedidas entram na request de criação? (seção 7)
 4. Campos da request `New or Change Account` e onde o ZBR entra nela (mapear ao vivo).
-5. Tela do *User x Business Roles Report* (O97) (mapear ao vivo, com prints).
+5. **Python da tarefa da lista de ZBR:** o repositório ainda não tem `.venv` próprio; a tarefa usa o Python do lock-users
+   (`agendar_zbr.ps1 -Python`). Criar o `.venv` daqui (instala pacotes: pedir ao analista) e registrar a tarefa de novo.
 6. **SUIM** validada ao vivo em 17/11/2026 (FB01, E1P/010): *Roles by Complex Selection Criteria* (RSUSR070) com
    `S_TCODE` = FB01 devolve 10 single roles (ex.: `Y-BRF-FB01-POST_DOCUMENT`). A análise usa as **single roles**
    (decisão do analista, 17/11/2026); composite que aparecer é ignorada com aviso.
