@@ -69,7 +69,12 @@ flowchart LR
 O processamento acontece **quando chega uma resposta**, não em horário fixo. O SAP GUI e o Chromium só existem no PC do
 analista, então o disparo é local:
 
-- `python -m gestao_usuarios vigiar` fica aberto (tarefa do Windows **ao fazer logon**, janela oculta).
+- `python -m gestao_usuarios vigiar` fica aberto: tarefa do Windows **`GestaoUsuarios-Vigia`, ao fazer logon**, janela oculta
+  (`scripts/agendar_vigia.ps1` registra; `rodar_vigia.vbs` esconde a janela e espera; `rodar_vigia.cmd` lança o Python). Roda em
+  **dry-run** (ensaia a request, sem Submit); `agendar_vigia.ps1 -Executar` troca para criar requests, só depois do primeiro
+  caso real acompanhado. Sem limite de tempo; se cair, o Agendador reinicia (até 5 vezes, de 2 em 2 min). Logs:
+  `logs/AAAA-MM-DD.log` e `logs/vigia_console.log`. Validada em 23/11/2026: pegou uma resposta em ~15 s, entregou o relatório
+  em ~2 min, não reprocessou e uma segunda instância saiu com código 4.
 - A cada `vigia.intervalo_s` (padrão 30 s) lista a pasta de solicitações; **só age se houver JSON novo** (custo zero no resto
   do tempo). Varredura simples em vez de evento do sistema de arquivos: o OneDrive cria e renomeia arquivos de formas que fazem
   os eventos falharem ou repetirem.
@@ -218,7 +223,7 @@ Na dúvida a aplicação **não age**: vira aviso no relatório e um humano deci
 | `grc_risco.py` | User Level Simulation (Rule Set `EP - SOD 2019`), leitura de Critical Action e Permission Level | validado ao vivo (L1170904 + `Y-BRF-FB01-POST_DOCUMENT`, 17/11/2026) |
 | `grc_request.py` | Request de criação `New or Change Account` (usuário + Business Role ZBR), com ensaio sem Submit | formulário e rodada de criação validados ao vivo em dry-run, sem submeter (23/11/2026: IGG existente recusado; IGG inventado barrado por falta de nome/e-mail no GRC); **Submit nunca testado** |
 | `relatorio.py` | Pasta por pedido: `relatorio.html` (gravado por último), `assunto.txt` e prints | validado ao vivo (modificação) |
-| `__main__.py` | CLI: `rodada`, `processar` (JSON avulso), `vigiar` (varredura da pasta, instância única) | `processar` validado ao vivo; `vigiar` e `rodada` testados só com simuladores |
+| `__main__.py` | CLI: `rodada`, `processar` (JSON avulso), `vigiar` (varredura da pasta, instância única) | validado ao vivo (`processar` e `vigiar`, 23/11/2026) |
 
 ---
 
