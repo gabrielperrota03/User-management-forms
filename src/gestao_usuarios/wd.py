@@ -252,4 +252,4 @@ def ler_tabela(pagina, frame, cabecalho: str, ao_mostrar=None, max_telas: int = 
     faltam = linhas_faltando(linhas, total)
     if faltam:
         raise TelaInesperada(f"linhas não lidas do resultado: {faltam[:10]}")
-    return {"colunas": bruto["colunas"], "linhas": [linhas[i] for i in range(1, total + 1)], "total": total}
+    return {"id": bruto["id"], "colunas": bruto["colunas"], "linhas": [linhas[i] for i in range(1, total + 1)], "total": total}

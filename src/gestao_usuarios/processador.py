@@ -7,7 +7,7 @@ from datetime import datetime
 
 from .analise import Comparativo, ResultadoRole, comparar
 from .decisao import Acao, AcaoRequest, UsuarioSap, alvo_da_simulacao, decidir_entrada, decidir_request
-from .erros import SessaoParada
+from .erros import ErroValidacaoGrc, RequestBarrada, SessaoParada, SubmitSemConfirmacao
 from .portas import FonteZbr, GrcRequest, GrcRisco, SapE1P
 from .resposta import Solicitacao, Tipo
 from .seguranca import RegrasSeguranca, avaliar_solicitacao
@@ -93,7 +93,36 @@ def processar(s: Solicitacao, *, regras: RegrasSeguranca, sap: SapE1P, grc_risco
             s, antes_do_submit, conflito=res.comparativo.conflito, analise_completa=res.comparativo.completo,
             bloquear_com_conflito=opcoes.bloquear_com_conflito, executar=opcoes.executar,
             requests_criadas=requests_criadas, max_requests=opcoes.max_requests)
-        if res.acao_request is AcaoRequest.CRIAR:
-            descricao = f"Criação de usuário {s.igg} (ZBR {res.zbr}) - Forms {s.id_resposta}"
-            res.request = grc_request.criar_usuario(s.igg, res.zbr, descricao)
+        if res.acao_request in (AcaoRequest.CRIAR, AcaoRequest.SIMULAR):
+            _criar_ou_ensaiar(res, s, sap, grc_request)
     return res
+
+
+def _criar_ou_ensaiar(res: Resultado, s: Solicitacao, sap: SapE1P, grc_request: GrcRequest) -> None:
+    """CRIAR faz o Submit; SIMULAR (dry-run) preenche e confere o formulário do GRC sem clicar em Submit. Uma trava do
+    formulário vira aviso; Submit sem confirmação NUNCA é repetido (a request pode existir)."""
+    descricao = f"Criação de usuário {s.igg} (ZBR {res.zbr}) - Forms {s.id_resposta}"
+    criar = res.acao_request is AcaoRequest.CRIAR
+
+    def verificar() -> str | None:                      # com o formulário pronto, imediatamente antes do Submit
+        u = sap.usuario(s.igg)
+        if u.existe is False:
+            return None
+        return f"{s.igg} passou a existir no E1P" if u.existe else f"não deu para confirmar {s.igg} no E1P"
+
+    try:
+        res.request = grc_request.criar_usuario(s.igg, res.zbr, descricao, submeter=criar, verificar=verificar)
+        if not criar:
+            res.avisos.append("ensaio da request: formulário do GRC preenchido e conferido, Submit NÃO clicado (dry-run)")
+    except SessaoParada:
+        raise
+    except (RequestBarrada, ErroValidacaoGrc) as e:
+        res.acao_request = AcaoRequest.BARRADA_FORMULARIO
+        res.avisos.append(f"request {'não criada' if criar else 'não passaria'}: {e}")
+    except SubmitSemConfirmacao as e:
+        res.acao_request = AcaoRequest.FALHOU_SUBMIT
+        res.avisos.append(str(e))
+    except Exception as e:  # noqa: BLE001 - falha de tela no meio do preenchimento: nada foi enviado
+        log.exception("falha ao preencher a request de criação de %s", s.igg)
+        res.acao_request = AcaoRequest.BARRADA_FORMULARIO
+        res.avisos.append(f"request não {'criada' if criar else 'ensaiada'}: falha no formulário do GRC ({type(e).__name__}: {e})")

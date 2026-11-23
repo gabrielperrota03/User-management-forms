@@ -8,6 +8,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from .analise import Risco
     from .decisao import UsuarioSap
 
@@ -31,5 +33,8 @@ class GrcRisco(Protocol):
 
 
 class GrcRequest(Protocol):
-    def criar_usuario(self, igg: str, zbr: str, descricao: str) -> str:
-        """Request 'New or Change Account' de criação; devolve o número da request (só com a mensagem de sucesso)."""
+    def criar_usuario(self, igg: str, zbr: str, descricao: str, *, submeter: bool = True,
+                      verificar: "Callable[[], str | None] | None" = None) -> str | None:
+        """Request 'New or Change Account' (usuário novo + business role ZBR). Com submeter=True devolve o número da request
+        (só com a mensagem de sucesso); com submeter=False (ensaio) preenche e confere o formulário e devolve None.
+        `verificar` roda com o formulário pronto, imediatamente antes do Submit: devolve o motivo de recusa ou None."""

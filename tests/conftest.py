@@ -60,10 +60,23 @@ class GrcRiscoFalso:
 
 
 class GrcRequestFalso:
-    def __init__(self):
+    def __init__(self, erro: Exception | None = None):
         self.criadas: list[tuple[str, str, str]] = []
+        self.ensaios: list[tuple[str, str, str]] = []
+        self.verificacoes: list[str | None] = []
+        self.erro = erro
 
-    def criar_usuario(self, igg, zbr, descricao):
+    def criar_usuario(self, igg, zbr, descricao, *, submeter=True, verificar=None):
+        if verificar is not None:
+            self.verificacoes.append(verificar())                  # com o formulário "pronto", antes do Submit
+            if self.verificacoes[-1]:
+                from gestao_usuarios.erros import RequestBarrada
+                raise RequestBarrada(self.verificacoes[-1])
+        if self.erro is not None:
+            raise self.erro
+        if not submeter:
+            self.ensaios.append((igg, zbr, descricao))
+            return None
         self.criadas.append((igg, zbr, descricao))
         return "700001"
 

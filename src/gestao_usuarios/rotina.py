@@ -90,8 +90,8 @@ class _PortasPreguicosas:
     def simular(self, usuario, role):
         return self.c.grc_risco().simular(usuario, role)
 
-    def criar_usuario(self, igg, zbr, descricao):
-        return self.c.grc_request().criar_usuario(igg, zbr, descricao)
+    def criar_usuario(self, igg, zbr, descricao, **opcoes):
+        return self.c.grc_request().criar_usuario(igg, zbr, descricao, **opcoes)
 
     def zbrs_de(self, igg):
         return self.c.fonte_zbr().zbrs_de(igg)

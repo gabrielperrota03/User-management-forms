@@ -61,6 +61,8 @@ class AcaoRequest(StrEnum):
     BARRADA_CONFLITO = "barrada_conflito"
     BARRADA_ANALISE_INCOMPLETA = "barrada_analise_incompleta"
     BARRADA_DISJUNTOR = "barrada_disjuntor"
+    BARRADA_FORMULARIO = "barrada_formulario"              # trava do próprio formulário do GRC (dados do usuário, ZBR, conferência)
+    FALHOU_SUBMIT = "falhou_submit"                        # GRC recusou o Submit ou ele ficou sem confirmação: um humano confere
 
 
 def decidir_request(s: Solicitacao, usuario_antes_do_submit: UsuarioSap, *, conflito: bool, analise_completa: bool,

@@ -28,6 +28,8 @@ def situacao(res: Resultado) -> str:
         return "RECUSADA"
     if res.acao is not Acao.ANALISAR or res.comparativo is None or not res.comparativo.completo:
         return "AVISO"
+    if res.acao_request in (AcaoRequest.FALHOU_SUBMIT, AcaoRequest.BARRADA_FORMULARIO):
+        return "AVISO"
     if res.comparativo.conflito:
         return "CONFLITO"
     if res.comparativo.sem_role:
@@ -51,6 +53,9 @@ def _texto_request(res: Resultado) -> str:
         AcaoRequest.BARRADA_CONFLITO: "Request NÃO criada: a análise encontrou conflito de risco.",
         AcaoRequest.BARRADA_ANALISE_INCOMPLETA: "Request NÃO criada: a análise ficou incompleta.",
         AcaoRequest.BARRADA_DISJUNTOR: "Request NÃO criada: limite de requests da rodada atingido (próxima rodada).",
+        AcaoRequest.BARRADA_FORMULARIO: "Request NÃO criada: uma trava do formulário do GRC a impediu (ver os avisos).",
+        AcaoRequest.FALHOU_SUBMIT: "<b>ATENÇÃO:</b> o Submit no GRC não foi confirmado. A request PODE ter sido criada: "
+                                   "conferir no Request Status antes de repetir (ver os avisos).",
     }[res.acao_request]
 
 

@@ -55,13 +55,51 @@ def test_criacao_sem_conflito_cria_request_com_zbr_da_referencia():
     assert res.alvo_simulacao == "L7654321" and {u for u, _ in risco.simulados} == {"L7654321"}
     assert res.acao_request is AcaoRequest.CRIAR and res.request == "700001"
     assert request.criadas[0][:2] == ("L1234567", "ZBRCOORD")
-    assert sap.lidos.count("L1234567") == 2, "relido logo antes do Submit"
+    assert sap.lidos.count("L1234567") == 3, "lido no início, relido antes de decidir e de novo com o formulário pronto"
 
 
 def test_criacao_em_dry_run_nao_cria():
     sap = SapFalso({"L7654321": UsuarioSap(True)}, ROLES)
     res, _, request = rodar(solicitacao(**CRIACAO), sap, executar=False)
     assert res.acao_request is AcaoRequest.SIMULAR and request.criadas == []
+    assert request.ensaios and request.ensaios[0][:2] == ("L1234567", "ZBRCOORD"), "dry-run ensaia o formulário sem submeter"
+    assert any("Submit NÃO clicado" in a for a in res.avisos) and res.request is None
+
+
+def test_verificacao_de_ultima_hora_roda_com_o_formulario_pronto():
+    sap = SapFalso({"L7654321": UsuarioSap(True)}, ROLES)
+    res, _, request = rodar(solicitacao(**CRIACAO), sap)
+    assert request.verificacoes == [None] and res.request == "700001"
+
+
+def test_trava_do_formulario_vira_aviso_sem_request():
+    from gestao_usuarios.erros import UsuarioSemDadosNoGrc
+    sap = SapFalso({"L7654321": UsuarioSap(True)}, ROLES)
+    request = GrcRequestFalso(UsuarioSemDadosNoGrc("o GRC não preencheu First Name"))
+    res = processar(solicitacao(**CRIACAO), regras=RegrasSeguranca(), sap=sap, grc_risco=GrcRiscoFalso(), grc_request=request,
+                    lista_zbr=ListaZbr(AGORA, {"L7654321": ("ZBRCOORD",)}), fonte_zbr=None, agora=AGORA,
+                    opcoes=Opcoes(executar=True))
+    assert res.acao_request is AcaoRequest.BARRADA_FORMULARIO and res.request is None
+    assert any("não criada" in a and "First Name" in a for a in res.avisos)
+
+
+def test_submit_sem_confirmacao_nunca_e_repetido():
+    from gestao_usuarios.erros import SubmitSemConfirmacao
+    sap = SapFalso({"L7654321": UsuarioSap(True)}, ROLES)
+    request = GrcRequestFalso(SubmitSemConfirmacao("Submit clicado, mas sem mensagem: CONFERIR no Request Status"))
+    res = processar(solicitacao(**CRIACAO), regras=RegrasSeguranca(), sap=sap, grc_risco=GrcRiscoFalso(), grc_request=request,
+                    lista_zbr=ListaZbr(AGORA, {"L7654321": ("ZBRCOORD",)}), fonte_zbr=None, agora=AGORA,
+                    opcoes=Opcoes(executar=True))
+    assert res.acao_request is AcaoRequest.FALHOU_SUBMIT and any("CONFERIR" in a for a in res.avisos)
+
+
+def test_falha_de_tela_no_formulario_nao_cria_e_avisa():
+    sap = SapFalso({"L7654321": UsuarioSap(True)}, ROLES)
+    request = GrcRequestFalso(RuntimeError("tela inesperada"))
+    res = processar(solicitacao(**CRIACAO), regras=RegrasSeguranca(), sap=sap, grc_risco=GrcRiscoFalso(), grc_request=request,
+                    lista_zbr=ListaZbr(AGORA, {"L7654321": ("ZBRCOORD",)}), fonte_zbr=None, agora=AGORA,
+                    opcoes=Opcoes(executar=True))
+    assert res.acao_request is AcaoRequest.BARRADA_FORMULARIO and res.request is None and request.criadas == []
 
 
 def test_criacao_com_conflito_nao_cria():

@@ -135,17 +135,34 @@ em qualquer candidata; o assunto do email ganha `CONFLITO`. A aplicação **reco
 
 ---
 
-## 7. Request de criação no GRC
+## 7. Request de criação no GRC (`grc_request.py`)
 
-Só quando **tipo = Criação** e o usuário **não existe** no E1P (conferido na SU01D logo antes do Submit, de novo).
+Só quando **tipo = Criação** e o usuário **não existe** no E1P (SU01D lida no início, de novo antes de decidir e uma terceira vez
+com o formulário já pronto, imediatamente antes do Submit). É a **única escrita** da aplicação no GRC.
 
-- Request Type `New or Change Account`, User = IGG, Functional Area `EP- BRAZIL`, User Group `BR-TEP`, sistema `E1PCLNT010`,
-  ZBR do usuário de referência. **[Campos a mapear ao vivo]**
-- Mesmo padrão do lock-users: localização por `ct` + rótulo, **releitura da tela** antes do Submit, sucesso só com a mensagem
-  `the request number is N`, número gravado no manifesto, sem reenvio.
-- **Dry-run é o padrão**: sem `--executar` nada é criado (o relatório mostra "criaria").
-- Disjuntor `--max-requests` (padrão 3 por rodada).
-- **Com conflito de risco: não cria a request**, avisa. **[A confirmar com o analista]**
+**Formulário mapeado ao vivo em 23/11/2026 (sem submeter nada):** *Access Management › Access Request* (janela nova).
+1. Request Type `New or Change Account`; Request For `Other`; Description (obrigatória); User = IGG + Enter.
+2. O GRC puxa **First Name, Last Name e Email** (aba *User Details*; obrigatórios e **travados**). Para um IGG que o GRC não
+   conhece eles ficam vazios e a request não seria aceita: a aplicação **barra** (`UsuarioSemDadosNoGrc`) e avisa.
+3. Functional Area `EP- BRAZIL` e User Group Name `BR-TEP`. Têm de vir **antes** do Add (senão: *Enter the value of Functional
+   Area before adding roles*).
+4. Aba *User Access* › Add › **Role** › *Select Roles*: Role Type `Business Role` (o ZBR é uma Business Role), Role / Profile
+   Name = ZBR › Search › exatamente 1 resultado › seta Add › OK. A grade fica com **1 linha**: Assignment = ZBR, Type
+   `Business Role`, Valid To 31.12.9999, Provisioning Action `Assign`.
+5. Conferência antes do Submit: cabeçalho (tipo, IGG, área, grupo, descrição) e grade (1 linha, ZBR, tipo, ação, validade) contra o
+   esperado; qualquer divergência barra (`RequestBarrada`). Print do formulário preenchido vai para o relatório.
+6. Submit (único clique do projeto): sucesso só com a mensagem `the request number is N`; erro de validação (*Enter the value for
+   ...*) vira aviso; Submit **sem** confirmação (`SubmitSemConfirmacao`) **nunca é repetido** (a request pode existir: conferir
+   no Request Status) e o relatório avisa em destaque.
+
+**Aprovação:** diferente do Lock/Update (efeito imediato), a atribuição da role de negócio tem **Assignment Approver** (o GRC
+preenche, ex.: `J0025020(3)`): a request entra num workflow de aprovação e o usuário só nasce no SAP depois dele.
+
+- **Dry-run é o padrão e também ensaia a request:** sem `--executar` o formulário do GRC é preenchido e conferido, o print é
+  tirado e o **Submit não é clicado** (o relatório diz "ensaio da request"). Com `--executar` faz o Submit, sem pedir
+  confirmação no console (a vigia roda sozinha; a proteção são as travas acima).
+- Disjuntor `request.max_por_rodada` (padrão 3).
+- **Com conflito de risco: não cria a request**, avisa (`request.bloquear_com_conflito`). **[A confirmar com o analista]**
 - As single roles pedidas entram na mesma request? **[A confirmar]** Hoje: não; a request só cria o usuário com o ZBR.
 
 ---
@@ -199,7 +216,7 @@ Na dúvida a aplicação **não age**: vira aviso no relatório e um humano deci
 | `sap_o97.py` | *User x Business Roles Report*: um IGG (fallback) e a extração semanal da BR-TEP | validado ao vivo (19/11/2026) |
 | `wd.py` | Web Dynpro do GRC: botões (com lista de proibidos), combos, critérios, leitura de tabela paginada | paginação validada ao vivo (139 linhas, 19/11/2026) |
 | `grc_risco.py` | User Level Simulation (Rule Set `EP - SOD 2019`), leitura de Critical Action e Permission Level | validado ao vivo (L1170904 + `Y-BRF-FB01-POST_DOCUMENT`, 17/11/2026) |
-| `grc_request.py` | Request de criação `New or Change Account` (Playwright/CDP) | a fazer (mapear ao vivo) |
+| `grc_request.py` | Request de criação `New or Change Account` (usuário + Business Role ZBR), com ensaio sem Submit | formulário e rodada de criação validados ao vivo em dry-run, sem submeter (23/11/2026: IGG existente recusado; IGG inventado barrado por falta de nome/e-mail no GRC); **Submit nunca testado** |
 | `relatorio.py` | Pasta por pedido: `relatorio.html` (gravado por último), `assunto.txt` e prints | validado ao vivo (modificação) |
 | `__main__.py` | CLI: `rodada`, `processar` (JSON avulso), `vigiar` (varredura da pasta, instância única) | `processar` validado ao vivo; `vigiar` e `rodada` testados só com simuladores |
 
@@ -210,7 +227,11 @@ Na dúvida a aplicação **não age**: vira aviso no relatório e um humano deci
 1. Na criação, a simulação roda no usuário de referência? (seção 4)
 2. Com conflito, a request de criação é bloqueada? (seção 7)
 3. As single roles pedidas entram na request de criação? (seção 7)
-4. Campos da request `New or Change Account` e onde o ZBR entra nela (mapear ao vivo).
+4. **Teste real do Submit:** falta um IGG novo de verdade (que o GRC conheça, mas que não exista no E1P) para validar a
+   leitura de First Name/Last Name/Email, o Submit e o que o GRC faz no Submit (análise de risco própria, popup de risk
+   violation, aprovador). O Submit não foi testado.
+4a. **Pessoa nova que o GRC não conhece:** o Forms não coleta nome e e-mail; se o GRC não os achar, a request é barrada e avisa.
+   Decidir se o Forms passa a pedir nome e e-mail (e o código a preenchê-los) ou se o cadastro corporativo sempre os tem.
 5. **Python da tarefa da lista de ZBR:** o repositório ainda não tem `.venv` próprio; a tarefa usa o Python do lock-users
    (`agendar_zbr.ps1 -Python`). Criar o `.venv` daqui (instala pacotes: pedir ao analista) e registrar a tarefa de novo.
 6. **SUIM** validada ao vivo em 17/11/2026 (FB01, E1P/010): *Roles by Complex Selection Criteria* (RSUSR070) com

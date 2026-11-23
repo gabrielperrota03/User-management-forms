@@ -4,7 +4,7 @@
 - GRC: Chromium dedicado por CDP (aberto se estiver fechado, padrão do lock-users); a aba do NWBC é recarregada uma vez
   para renovar a sessão (o SSO reautentica sozinho). Login pedido ou sessão vencida = SessaoParada (o analista entra).
 - O97: FonteZbrO97 abre e fecha a própria sessão a cada consulta.
-- Request de criação: ainda não implementada (grc_request.py); pedir para criar levanta erro (vira AVISO no relatório).
+- Request de criação: grc_request.py, no mesmo Chromium (contexto da simulação).
 """
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ from urllib.parse import urlparse
 
 from . import sap_gui
 from .erros import SessaoParada
+from .grc_request import ConfigGrcRequest, GrcRequestPlaywright
 from .grc_risco import ConfigGrcRisco, GrcRiscoPlaywright
 from .sap_e1p import SapE1PReal
 from .sap_o97 import ConfigO97, FonteZbrO97
@@ -66,11 +67,6 @@ def _sessao_grc_expirada(pagina) -> bool:
     return False
 
 
-class GrcRequestPendente:
-    def criar_usuario(self, igg, zbr, descricao):
-        raise NotImplementedError("a request de criação no GRC ainda não foi implementada")
-
-
 class ConexoesReais:
     def __init__(self, cfg: dict):
         self.cfg = cfg
@@ -79,6 +75,7 @@ class ConexoesReais:
         self._pw = None
         self._grc = None
         self._o97 = None
+        self._request = None
         self._falha_grc: str | None = None
         self._pasta: Path | None = None
 
@@ -119,8 +116,10 @@ class ConexoesReais:
             raise SessaoParada("sessão do GRC expirada: entre na janela do Chromium dedicado e rode de novo")
         return GrcRiscoPlaywright(contexto, ConfigGrcRisco.de_config(self.cfg), self._pasta)
 
-    def grc_request(self):
-        return GrcRequestPendente()
+    def grc_request(self) -> GrcRequestPlaywright:
+        if self._request is None:
+            self._request = GrcRequestPlaywright(self.grc_risco().contexto, ConfigGrcRequest.de_config(self.cfg), self._pasta)
+        return self._request
 
     def fonte_zbr(self) -> FonteZbrO97:
         if self._o97 is None:
@@ -134,9 +133,12 @@ class ConexoesReais:
             self._sap.limpar(pasta_prints)
         if self._grc is not None:
             self._grc.pasta_prints, self._grc.prints = pasta_prints, []
+        if self._request is not None:
+            self._request.pasta_prints, self._request.prints = pasta_prints, []
 
     def evidencias(self) -> tuple[list[Path], list[str]]:
-        prints = (self._sap.prints if self._sap else []) + (self._grc.prints if self._grc else [])
+        prints = ((self._sap.prints if self._sap else []) + (self._grc.prints if self._grc else [])
+                  + (self._request.prints if self._request else []))
         avisos = list(self._sap.avisos) if self._sap else []
         return prints, avisos
 
