@@ -9,6 +9,8 @@ sap:
 grc:
   url: 'https://sapo97.main.glb.corp.local:8401/ui2/nwbc/?sap-client=960&sap-language=EN&sap-nwbc-node=root&sap-theme=sap_corbu'
   cdp: 'http://127.0.0.1:9222'       # Chromium dedicado com --remote-debugging-port
+  chrome: 'C:/dev/browsers/chrome-win64/chrome.exe'   # o mesmo do lock-users e do sox-automation
+  perfil: 'C:/dev/browsers/perfil-sox'
   functional_area: 'EP- BRAZIL'
   user_group: 'BR-TEP'
 

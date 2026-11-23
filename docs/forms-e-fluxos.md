@@ -8,14 +8,18 @@ Nome sugerido: **"Solicitação de acesso SAP (E1P)"**. Configurações: *Only p
 | # | Pergunta | Tipo | Obrigatória | Regra |
 |---|---|---|---|---|
 | 1 | Tipo de solicitação | Escolha: `Criação de usuário`, `Modificação de acesso` | sim | ramifica |
-| 2 | IGG do usuário | Texto curto | sim | restrição: letra + 7 dígitos (ex.: L1234567) |
-| 3 | Usuário de referência (IGG) | Texto curto | sim | **só aparece em Criação** (ramificação) |
-| 4 | Transações | Texto longo | sim | uma ou várias, separadas por vírgula, `;` ou linha (ex.: FB01, FB02) |
+| 2 | Usuário de referência (IGG) | Texto curto | sim | **só aparece em Criação** (ramificação) |
+| 3 | IGG do usuário | Texto curto | sim | letra + 7 dígitos (ex.: L1234567), conferido pelo sistema |
+| 4 | Transações | Texto longo | sim | uma ou várias, separadas por vírgula, `;` ou linha (ex.: FB01, FB02); máx. 10 |
 | 5 | Justificativa | Texto longo | sim | — |
 
-Ramificação (*Branching*): na pergunta 1, `Criação de usuário` → pergunta 3; `Modificação de acesso` → pergunta 4.
+Ramificação (*Branching*): na pergunta 1, `Criação de usuário` → pergunta 2; `Modificação de acesso` → pergunta 3.
+A referência vem antes do IGG porque no Forms só pergunta de escolha ramifica: com o IGG no meio, não haveria como mostrar a
+referência só na Criação sem duplicar a pergunta do IGG.
 
-O Forms não tem API pública de criação: o formulário é montado à mão (ou pela automação do navegador, com o analista acompanhando).
+O Forms não valida formato de texto (só números): IGG, transações e limites são conferidos pelo sistema (`seguranca.py`).
+O Forms não tem API pública de criação: o formulário é montado à mão ou pelo Claude Cowork, com o prompt de
+`docs/prompt-cowork-forms.md`.
 
 ## 2. Fluxo "Gestao Usuarios - Resposta do Forms para SharePoint"
 

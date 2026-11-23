@@ -67,6 +67,8 @@ def processar(s: Solicitacao, *, regras: RegrasSeguranca, sap: SapE1P, grc_risco
         res.zbr = zbrs[0]
     if s.tipo is Tipo.MODIFICACAO and res.usuario.bloqueado:
         res.avisos.append(f"{s.igg} está bloqueado no E1P")
+    elif s.tipo is Tipo.MODIFICACAO and res.usuario.bloqueado is None:
+        res.avisos.append(f"não deu para confirmar se {s.igg} está bloqueado no E1P (aba Logon Data não lida por inteiro)")
 
     res.alvo_simulacao = alvo_da_simulacao(s)
     resultados: list[ResultadoRole] = []

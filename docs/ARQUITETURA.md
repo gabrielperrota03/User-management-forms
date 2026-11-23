@@ -3,8 +3,9 @@
 Análise de risco automática de pedidos de acesso SAP (sistema **E1P**, mandante **010**) feitos por um **Microsoft Forms**, com
 **criação do usuário no GRC** apenas quando ele ainda não existe no SAP.
 
-Criado em 17/11/2026. Estado: especificação e núcleo puro (validação, decisão, comparação de riscos, lista de ZBR, manifesto) com
-testes. SAP (SUIM/SU01D/O97) e GRC (Risk Analysis e request) ainda não foram mapeados ao vivo: as portas existem, as implementações não.
+Criado em 17/11/2026. Estado (23/11/2026): a **modificação** roda de ponta a ponta ao vivo (SU01D → SUIM → simulação no GRC → relatório com prints);
+a lista de ZBR (O97) é atualizada toda segunda. Faltam a **request de criação** no GRC, o Forms e os fluxos do Power Automate, e a
+vigia ligada no logon do Windows.
 
 ---
 
@@ -191,13 +192,16 @@ Na dúvida a aplicação **não age**: vira aviso no relatório e um humano deci
 | `portas.py` | Interfaces `SapE1P`, `GrcRisco`, `GrcRequest`, `FonteZbr` | pronto |
 | `sap_gui.py` | Sessão própria por sistema (E1P/O97), leitura de ALV e popups | pronto (não testado ao vivo) |
 | `suim.py` | SUIM: transação → roles (caminho gravado + conferências de título, programa e popup) | validado ao vivo (FB01, 17/11/2026) |
-| `sap_e1p.py` | SU01D no E1P (portar do lock-users) | a fazer |
+| `sap_e1p.py` | Porta SapE1P real: SU01D (existe? bloqueado?, com print) + SUIM | validado ao vivo (23/11/2026) |
+| `capturas.py` | Prints do SAP (HardCopy) e do GRC, reduzidos a 1280 px | pronto |
+| `conexoes.py` | Conexões reais abertas sob demanda: sessão própria do E1P, Chromium dedicado (CDP), O97; falha no GRC para a rodada uma vez só | validado ao vivo |
+| `rotina.py` | Uma rodada: respostas novas → análise → relatório → manifesto; falha de um pedido vira aviso | validado ao vivo (modificação) |
 | `sap_o97.py` | *User x Business Roles Report*: um IGG (fallback) e a extração semanal da BR-TEP | validado ao vivo (19/11/2026) |
 | `wd.py` | Web Dynpro do GRC: botões (com lista de proibidos), combos, critérios, leitura de tabela paginada | paginação validada ao vivo (139 linhas, 19/11/2026) |
 | `grc_risco.py` | User Level Simulation (Rule Set `EP - SOD 2019`), leitura de Critical Action e Permission Level | validado ao vivo (L1170904 + `Y-BRF-FB01-POST_DOCUMENT`, 17/11/2026) |
 | `grc_request.py` | Request de criação `New or Change Account` (Playwright/CDP) | a fazer (mapear ao vivo) |
-| `relatorio.py` | HTML + prints | a fazer |
-| `vigia.py`, `__main__.py` | Varredura da pasta, CLI, códigos de saída | a fazer |
+| `relatorio.py` | Pasta por pedido: `relatorio.html` (gravado por último), `assunto.txt` e prints | validado ao vivo (modificação) |
+| `__main__.py` | CLI: `rodada`, `processar` (JSON avulso), `vigiar` (varredura da pasta, instância única) | `processar` validado ao vivo; `vigiar` e `rodada` testados só com simuladores |
 
 ---
 
@@ -215,3 +219,8 @@ Na dúvida a aplicação **não age**: vira aviso no relatório e um humano deci
 7. **Roles ocultas.** O popup do F8 avisa *"523 roles with missing authorization not displayed"*: o usuário que roda não
    enxerga todas as roles, e o resultado pode estar incompleto. Hoje vira aviso no relatório; decidir se basta ou se a rotina
    deve rodar com outro usuário/autorização.
+8. **Login do Chromium dedicado.** A sessão do GRC vence e o login (Windows Hello) é do analista. Com a vigia rodando sozinha,
+   um pedido que chega com a sessão vencida fica pendente e a vigia tenta de novo a cada 5 min; falta um aviso ao analista
+   (email ou notificação) para ele saber que precisa entrar.
+9. **Fluxo de email do relatório** (Power Automate, `docs/forms-e-fluxos.md`, seção 3) e o fluxo que grava as respostas do Forms
+   ainda não foram criados: o relatório já sai pronto na pasta `Relatorios Gestao Usuarios`, mas ninguém o envia.
