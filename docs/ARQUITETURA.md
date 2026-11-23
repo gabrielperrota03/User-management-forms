@@ -3,7 +3,7 @@
 Análise de risco automática de pedidos de acesso SAP (sistema **E1P**, mandante **010**) feitos por um **Microsoft Forms**, com
 **criação do usuário no GRC** apenas quando ele ainda não existe no SAP.
 
-Criado em 17/11/2026. Estado (23/11/2026): a **modificação** roda de ponta a ponta ao vivo (SU01D → SUIM → simulação no GRC → relatório com prints);
+Criado em 17/11/2026. Estado (23/11/2026): a **modificação** roda de ponta a ponta ao vivo (SU01D → SUIM → simulação no GRC → relatório com os prints do GRC);
 a lista de ZBR (O97) é atualizada toda segunda. Faltam a **request de criação** no GRC, o Forms e os fluxos do Power Automate, e a
 vigia ligada no logon do Windows.
 
@@ -192,11 +192,13 @@ Na dúvida a aplicação **não age**: vira aviso no relatório e um humano deci
 
 ## 9. Relatório e email
 
-- Pasta por solicitação: `Insumos - Automação/Relatorios Gestao Usuarios/AAAA-MM/AAAAMMDD_HHMMSS_<id>/` com `relatorio.html`
-  e os prints (`.png`): SUIM com o resultado de cada transação, GRC com o resultado de cada simulação, GRC após o Submit.
-- Assunto: `[gestao-usuarios] <Criação|Modificação> <IGG> - <OK|CONFLITO|AVISO>`.
-- Fluxo do Power Automate (seção do `docs/forms-e-fluxos.md`): ao criar `relatorio.html`, lista os `.png` da mesma pasta,
-  anexa e envia para o analista com CC fixo.
+- Pasta por solicitação: `Insumos - Automação/Relatorios Gestao Usuarios/AAAA-MM/AAAAMMDD_HHMMSS_<id>/` com o HTML
+  `AAAAMMDD_HHMMSS_<assunto>.html` (prints embutidos no corpo, com teto de 16 prints e ~4 MB) e os PNG originais. **Só os prints do
+  GRC** entram (resultado de cada simulação e formulário da request): SU01D e SUIM **não geram print** (decisão do analista,
+  23/11/2026; `SapE1PReal(tirar_prints=True)` liga de volta para depuração).
+- Assunto: `[gestao-usuarios] <Criação|Modificação> <IGG> - <OK|CONFLITO|AVISO|RECUSADA> (<transações>)`.
+- Fluxo do Power Automate **"Gestao Usuarios - Relatorio por email"** (`docs/forms-e-fluxos.md`, seção 3): criado e **ligado** (testado em 23/11/2026);
+  ao aparecer o HTML na pasta, envia o corpo por e-mail só para o analista (sem CC).
 
 ---
 
@@ -214,7 +216,7 @@ Na dúvida a aplicação **não age**: vira aviso no relatório e um humano deci
 | `portas.py` | Interfaces `SapE1P`, `GrcRisco`, `GrcRequest`, `FonteZbr` | pronto |
 | `sap_gui.py` | Sessão própria por sistema (E1P/O97), leitura de ALV e popups | pronto (não testado ao vivo) |
 | `suim.py` | SUIM: transação → roles (caminho gravado + conferências de título, programa e popup) | validado ao vivo (FB01, 17/11/2026) |
-| `sap_e1p.py` | Porta SapE1P real: SU01D (existe? bloqueado?, com print) + SUIM | validado ao vivo (23/11/2026) |
+| `sap_e1p.py` | Porta SapE1P real: SU01D (existe? bloqueado?) + SUIM, sem prints | validado ao vivo (23/11/2026) |
 | `capturas.py` | Prints do SAP (HardCopy) e do GRC, reduzidos a 1280 px | pronto |
 | `conexoes.py` | Conexões reais abertas sob demanda: sessão própria do E1P, Chromium dedicado (CDP), O97; falha no GRC para a rodada uma vez só | validado ao vivo |
 | `rotina.py` | Uma rodada: respostas novas → análise → relatório → manifesto; falha de um pedido vira aviso | validado ao vivo (modificação) |
@@ -248,5 +250,7 @@ Na dúvida a aplicação **não age**: vira aviso no relatório e um humano deci
 8. **Login do Chromium dedicado.** A sessão do GRC vence e o login (Windows Hello) é do analista. Com a vigia rodando sozinha,
    um pedido que chega com a sessão vencida fica pendente e a vigia tenta de novo a cada 5 min; falta um aviso ao analista
    (email ou notificação) para ele saber que precisa entrar.
-9. **Fluxo de email do relatório** (Power Automate, `docs/forms-e-fluxos.md`, seção 3) e o fluxo que grava as respostas do Forms
-   ainda não foram criados: o relatório já sai pronto na pasta `Relatorios Gestao Usuarios`, mas ninguém o envia.
+9. **Fluxos do Power Automate:** o do relatório por e-mail está **ligado e testado** (e-mail só para o analista, imagens ok) e uma regra
+   do Outlook entrega o assunto `[gestao-usuarios]` na pasta *Automations › Gestão de usuários* (`docs/forms-e-fluxos.md`, seção 3).
+   O que grava as respostas do Forms **depende do Forms**, que ainda não foi criado.
+   não foi criado.

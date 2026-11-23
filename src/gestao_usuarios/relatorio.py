@@ -1,11 +1,13 @@
-"""Relatório de uma solicitação: pasta com relatorio.html, assunto.txt e os prints (PNG) para anexar no email.
+"""Relatório de uma solicitação: pasta com o HTML (prints embutidos no corpo) e os PNG originais.
 
-Pasta: <relatorios>/AAAA-MM/AAAAMMDD_HHMMSS_<id da resposta>/. O relatorio.html é gravado POR ÚLTIMO (via .tmp + troca),
-porque é ele que dispara o fluxo do Power Automate: quando ele aparece, os prints e o assunto já estão lá.
-Todo texto que veio do Forms é escapado.
+Pasta: <relatorios>/AAAA-MM/AAAAMMDD_HHMMSS_<id da resposta>/. O HTML se chama AAAAMMDD_HHMMSS_<assunto>.html: o fluxo do Power
+Automate (copiado do lock-users) usa o nome do arquivo sem os 16 primeiros caracteres como assunto do e-mail. É gravado POR
+ÚLTIMO (via .tmp + troca) porque é ele que dispara o fluxo. Os prints vão embutidos em base64 no corpo (como no lock-users),
+com um teto de quantidade e de tamanho; os que passarem do teto só ficam na pasta. Todo texto que veio do Forms é escapado.
 """
 from __future__ import annotations
 
+import base64
 import re
 import shutil
 from datetime import datetime
@@ -19,6 +21,8 @@ from .processador import Resultado
 from .resposta import Tipo
 
 PREFIXO_ASSUNTO = "[gestao-usuarios]"
+MAX_PRINTS_EMBUTIDOS = 16
+MAX_BYTES_EMBUTIDOS = 4_000_000          # PNG somados (o base64 cresce ~33%); acima disso só ficam na pasta
 CORES = {"Critical": "#b00020", "High": "#d35400", "Medium": "#b7950b", "Low": "#2e86c1"}
 
 
@@ -59,11 +63,12 @@ def _texto_request(res: Resultado) -> str:
     }[res.acao_request]
 
 
-def montar_html(res: Resultado, prints: list[str], gerado_em: datetime) -> str:
+def montar_html(res: Resultado, prints: list[tuple[str, str | None]], gerado_em: datetime) -> str:
+    """`prints` = [(nome do arquivo, data URI do PNG ou None se passou do teto)]."""
     s = res.solicitacao
     sit = situacao(res)
     cor = {"OK": "#1e8449", "CONFLITO": "#b00020", "AVISO": "#b7950b", "RECUSADA": "#555"}[sit]
-    p = [f"""<html><head><meta charset="utf-8"><style>
+    p = [f"""<html><head><meta charset="utf-8"><title>{escape(assunto(res))}</title><style>
 body{{font-family:Segoe UI,Arial,sans-serif;font-size:13px;color:#222}} table{{border-collapse:collapse;margin:6px 0 14px}}
 td,th{{border:1px solid #ccc;padding:4px 8px;text-align:left;vertical-align:top}} th{{background:#f2f2f2}}
 .sit{{display:inline-block;padding:3px 10px;color:#fff;background:{cor};border-radius:3px;font-weight:bold}}
@@ -115,7 +120,12 @@ td,th{{border:1px solid #ccc;padding:4px 8px;text-align:left;vertical-align:top}
     if req:
         p.append(f"<h3>Request no GRC</h3><p>{req}</p>")
     if prints:
-        p.append("<h3>Evidências (anexos)</h3><ul>" + "".join(f"<li>{escape(n)}</li>" for n in prints) + "</ul>")
+        p.append("<h3>Evidências</h3>")
+        for nome, uri in prints:
+            if uri:
+                p.append(f"<p><b>{escape(nome)}</b><br><img src=\"{uri}\" style=\"max-width:1100px;border:1px solid #ccc\"></p>")
+            else:
+                p.append(f"<p><b>{escape(nome)}</b>: não embutida (limite do e-mail); está na pasta do relatório.</p>")
     p.append(f"<p style='color:#888'>Gerado em {gerado_em:%d/%m/%Y %H:%M} pela automação User-management-forms.</p>"
              "</body></html>")
     return "\n".join(p)
@@ -126,17 +136,34 @@ def _nome_pasta(res: Resultado, gerado_em: datetime) -> str:
     return f"{gerado_em:%Y%m%d_%H%M%S}_{ident}"
 
 
+def nome_do_html(res: Resultado, gerado_em: datetime) -> str:
+    """AAAAMMDD_HHMMSS_<assunto>.html: o prefixo tem 16 caracteres (o fluxo os corta) e o assunto perde o que o SharePoint não
+    aceita em nome de arquivo (as transações podem ter '/')."""
+    limpo = re.sub(r'[\/:*?"<>|#%~&{}]', "_", assunto(res)).strip(" .")[:150]
+    return f"{gerado_em:%Y%m%d_%H%M%S}_{limpo}.html"
+
+
+def _embutir(origens: list[Path]) -> list[tuple[str, str | None]]:
+    """[(nome, data URI)] dos PNG na ordem, até o teto de quantidade e de bytes; o resto vai com uri None."""
+    saida, total = [], 0
+    for i, origem in enumerate(origens, 1):
+        nome = f"{i:02d}_{Path(origem).name}"
+        dados = Path(origem).read_bytes()
+        if len(saida) < MAX_PRINTS_EMBUTIDOS and total + len(dados) <= MAX_BYTES_EMBUTIDOS:
+            total += len(dados)
+            saida.append((nome, "data:image/png;base64," + base64.b64encode(dados).decode("ascii")))
+        else:
+            saida.append((nome, None))
+    return saida
+
+
 def gravar(res: Resultado, prints: list[Path], raiz: Path, gerado_em: datetime) -> Path:
-    """Grava a pasta do relatório e devolve o caminho do relatorio.html (gravado por último)."""
+    """Grava a pasta do relatório e devolve o caminho do HTML (gravado por último)."""
     pasta = raiz / f"{gerado_em:%Y-%m}" / _nome_pasta(res, gerado_em)
     pasta.mkdir(parents=True, exist_ok=True)
-    nomes = []
-    for i, origem in enumerate(prints, 1):
-        if Path(origem).exists():
-            nome = f"{i:02d}_{Path(origem).name}"
-            shutil.copyfile(origem, pasta / nome)
-            nomes.append(nome)
-    gravar_texto(pasta / "assunto.txt", assunto(res))
-    destino = pasta / "relatorio.html"
-    gravar_texto(destino, montar_html(res, nomes, gerado_em))
+    existentes = [Path(o) for o in prints if Path(o).exists()]
+    for i, origem in enumerate(existentes, 1):
+        shutil.copyfile(origem, pasta / f"{i:02d}_{origem.name}")
+    destino = pasta / nome_do_html(res, gerado_em)
+    gravar_texto(destino, montar_html(res, _embutir(existentes), gerado_em))
     return destino

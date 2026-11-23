@@ -1,4 +1,5 @@
 """Rodada e relatório com SAP/GRC simulados."""
+import base64
 import json
 from datetime import datetime
 from pathlib import Path
@@ -73,7 +74,7 @@ def test_modificacao_ponta_a_ponta(tmp_path):
     arq = escrever(tmp_path / "sol" / "11_26", "20261123_100000_42.json")
     con = ConexoesFalsas()
     png = tmp_path / "suim_FB01.png"
-    png.write_bytes(b"png")
+    png.write_bytes(b"PNG-teste")
     con.prints = [png]
     con.evidencias = lambda: ([png], ["SUIM (FB01): 523 roles não exibidas"])
     saida, man = rodar(tmp_path, [arq], con)
@@ -85,7 +86,9 @@ def test_modificacao_ponta_a_ponta(tmp_path):
     assert "&lt;script&gt;" in html and "<script>" not in html, "texto escapado"
     assert "523 roles" in html
     assert (pasta / "01_suim_FB01.png").exists()
-    assert (pasta / "assunto.txt").read_text(encoding="utf-8") == "[gestao-usuarios] Modificação L1234567 - CONFLITO (FB01)"
+    assert saida.resumos[0].relatorio.name.endswith("_[gestao-usuarios] Modificação L1234567 - CONFLITO (FB01).html")
+    assert "<title>[gestao-usuarios] Modificação L1234567 - CONFLITO (FB01)</title>" in html
+    assert 'src="data:image/png;base64,' + base64.b64encode(b"PNG-teste").decode() + '"' in html, "print embutido no corpo"
     e = Manifesto(tmp_path / "estado.json").entradas["42"]
     assert e.fase is Fase.CONCLUIDA and e.conflito is True and e.arquivo == arq.name
 
@@ -201,4 +204,37 @@ def test_html_gravado_por_ultimo(tmp_path, monkeypatch):
     monkeypatch.setattr(relatorio, "gravar_texto", lambda c, t: (ordem.append(c.name), real(c, t)))
     arq = escrever(tmp_path / "sol", "a.json")
     rodar(tmp_path, [arq], ConexoesFalsas())
-    assert ordem == ["assunto.txt", "relatorio.html"]
+    assert len(ordem) == 1 and ordem[0].endswith(".html"), "só o HTML é gravado por texto, e por último"
+
+
+def test_nome_do_html_para_o_fluxo(tmp_path):
+    """O fluxo corta os 16 primeiros caracteres (AAAAMMDD_HHMMSS_) e o '.html' (5): sobra o assunto."""
+    arq = escrever(tmp_path / "sol", "a.json")
+    saida, _ = rodar(tmp_path, [arq], ConexoesFalsas())
+    nome = saida.resumos[0].relatorio.name
+    assert nome[:16] == "20261123_" + nome[9:16] and nome[8] == "_" and nome[15] == "_"
+    assert nome[16:-5] == "[gestao-usuarios] Modificação L1234567 - CONFLITO (FB01)"
+
+
+def test_caracteres_invalidos_no_nome_do_arquivo():
+    from datetime import datetime as dt
+    from gestao_usuarios.processador import Resultado
+    from .conftest import solicitacao
+    res = Resultado(solicitacao(transacoes="/SCWM/MON, FB01"), motivo="x")
+    nome = relatorio.nome_do_html(res, dt(2026, 11, 23, 10, 0, 0))
+    assert nome.startswith("20261123_100000_") and "/" not in nome[16:] and ":" not in nome[16:]
+    assert "_SCWM_MON" in nome
+
+
+def test_prints_alem_do_teto_ficam_so_na_pasta(tmp_path, monkeypatch):
+    monkeypatch.setattr(relatorio, "MAX_PRINTS_EMBUTIDOS", 2)
+    pngs = []
+    for i in range(4):
+        p = tmp_path / f"p{i}.png"
+        p.write_bytes(b"x" * 10)
+        pngs.append(p)
+    emb = relatorio._embutir(pngs)
+    assert [u is not None for _, u in emb] == [True, True, False, False]
+    monkeypatch.setattr(relatorio, "MAX_PRINTS_EMBUTIDOS", 99)
+    monkeypatch.setattr(relatorio, "MAX_BYTES_EMBUTIDOS", 25)
+    assert [u is not None for _, u in relatorio._embutir(pngs)] == [True, True, False, False]

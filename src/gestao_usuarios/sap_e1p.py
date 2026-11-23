@@ -4,6 +4,7 @@ SU01D portada do lock-users (calibrada ao vivo em 05/11/2026): /nSU01D, User = I
 existe; senão a barra de status diz que não existe. Aba Logon Data: a linha 'User is locked' indica bloqueio; se as seções
 conhecidas da aba não foram lidas, o estado de bloqueio é incerto (None) e o relatório avisa.
 Usa UMA sessão própria (sap_gui.SessaoPropria) aberta pela rodada; nunca as sessões do analista.
+Não tira print da SU01D nem da SUIM (o relatório só leva os do GRC); `tirar_prints=True` liga de volta, para depuração.
 """
 from __future__ import annotations
 
@@ -42,10 +43,11 @@ def interpretar_logon(textos: list[str]) -> UsuarioSap:
 class SapE1PReal:
     """Porta SapE1P. `prints` e `avisos` acumulam o que vai para o relatório (a rodada esvazia entre solicitações)."""
 
-    def __init__(self, sessao, c_suim: ConfigSuim, pasta_prints: Path | None = None):
+    def __init__(self, sessao, c_suim: ConfigSuim, pasta_prints: Path | None = None, tirar_prints: bool = False):
         self.sessao = sessao
         self.suim = SuimRoles(sessao, c_suim)
         self.pasta_prints = pasta_prints
+        self.tirar_prints = tirar_prints        # SU01D/SUIM sem print: decisão do analista, 23/11/2026 (só o GRC é evidência)
         self.prints: list[Path] = []
 
     @property
@@ -57,7 +59,7 @@ class SapE1PReal:
         self.suim.avisos.clear()
 
     def _print(self, nome: str) -> None:
-        if self.pasta_prints is not None:
+        if self.tirar_prints and self.pasta_prints is not None:
             p = capturar_janela_sap(self.sessao.findById("wnd[0]"), self.pasta_prints / nome)
             if p:
                 self.prints.append(p)
