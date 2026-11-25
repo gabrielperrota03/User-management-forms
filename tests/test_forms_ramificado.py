@@ -72,7 +72,7 @@ def test_criacao_sem_transacoes_nao_simula_e_cria_a_request():
     assert res.sem_analise and res.comparativo is None and risco.simulados == []
     assert res.acao_request is AcaoRequest.CRIAR and request.criadas == [
         ("L1234567", "ZBRCOORD", "Criação de usuário L1234567 (ZBR ZBRCOORD) - Forms 7")]
-    assert any("não houve análise de risco" in a for a in res.avisos)
+    assert res.avisos == []                              # a criação não tem análise por desenho: o e-mail próprio explica
 
 
 def test_criacao_sem_transacoes_em_dry_run_so_ensaia():
@@ -82,10 +82,10 @@ def test_criacao_sem_transacoes_em_dry_run_so_ensaia():
 
 def test_relatorio_da_criacao_sem_transacoes():
     res, _, _ = _rodar(False)
-    assert relatorio.situacao(res) == "SEM ANÁLISE"
-    assert relatorio.assunto(res) == "[gestao-usuarios] Criação L1234567 - SEM ANÁLISE (sem transações)"
+    assert relatorio.situacao(res) == "PARA CRIAR"
+    assert relatorio.assunto(res) == "[gestao-usuarios] Criação L1234567 - PARA CRIAR (ZBR ZBRCOORD)"
     html = relatorio.montar_html(res, [], AGORA)
-    assert "não houve análise de risco" in html and "(nenhuma)" in html and "SEM ANÁLISE" in html
+    assert "PARA CRIAR" in html and "Transações" not in html and "Análise de risco" not in html
 
 
 @pytest.mark.parametrize("acao", [AcaoRequest.BARRADA_FORMULARIO, AcaoRequest.FALHOU_SUBMIT])
@@ -157,3 +157,74 @@ def test_quadro_do_relatorio_mostra_so_criticos_e_o_detalhe_completo():
     html = relatorio.montar_html(res, [], AGORA)
     assert "<th>Críticos</th>" in html and "<th>High</th>" not in html and "<th>Medium</th>" not in html
     assert "CFI01_EP" in html and "XPTO" in html            # o detalhe continua listando todos os riscos
+
+
+# ------------------------------------------------------------------ request desligada e e-mail próprio da criação
+def _rodar_com(usuarios, zbrs, request_grc=False, referencia="L7654321"):
+    sap = SapFalso(usuarios, {})
+    risco, request = GrcRiscoFalso(), GrcRequestFalso()
+    res = processar(de_dict({**CRIACAO, "criacao_referencia": referencia}, "a.json"), regras=RegrasSeguranca(), sap=sap,
+                    grc_risco=risco, grc_request=request, lista_zbr=ListaZbr(AGORA, zbrs), fonte_zbr=None, agora=AGORA,
+                    opcoes=Opcoes(executar=True, request_grc=request_grc))
+    return res, sap, risco, request
+
+
+def test_request_desligada_nao_toca_no_grc_nem_ensaia():
+    res, sap, risco, request = _rodar_com({"L7654321": UsuarioSap(True)}, {"L7654321": ("ZBRCOORD",)})
+    assert res.acao_request is AcaoRequest.DESLIGADA
+    assert request.criadas == [] and request.ensaios == [] and risco.simulados == []
+    assert sap.lidos == ["L1234567", "L7654321"], "sem a releitura de antes do Submit: não há Submit"
+    assert relatorio.situacao(res) == "PARA CRIAR"
+
+
+def test_email_da_criacao_tem_estrutura_propria():
+    res, *_ = _rodar_com({"L7654321": UsuarioSap(True)}, {"L7654321": ("ZBRCOORD",)})
+    html = relatorio.montar_html(res, [], AGORA)
+    for esperado in ("Pedido de criação de usuário SAP (E1P)", "Novo usuário (IGG)", "Perfil a atribuir (ZBR)", "ZBRCOORD",
+                     "Conferências no E1P", "O novo usuário ainda não existe no E1P", "O usuário de referência existe no E1P",
+                     "ZBR do usuário de referência", "Tudo conferido", "não foi aberta"):
+        assert esperado in html, esperado
+    for proibido in ("Solicitação de acesso SAP", "Transações", "Análise de risco", "Tipo</th>"):
+        assert proibido not in html, proibido
+
+
+def test_email_da_modificacao_continua_com_a_sua_estrutura():
+    from gestao_usuarios.processador import Resultado
+    res = Resultado(de_dict(MODIFICACAO, "a.json"), acao=__import__("gestao_usuarios.decisao", fromlist=["Acao"]).Acao.ANALISAR)
+    html = relatorio.montar_html(res, [], AGORA)
+    assert "Solicitação de acesso SAP (E1P)" in html and "Modificação de acesso" in html and "Transações" in html
+    assert "Conferências no E1P" not in html and "Perfil a atribuir" not in html
+
+
+def test_email_da_criacao_quando_o_usuario_ja_existe():
+    res, _, _, request = _rodar_com({"L1234567": UsuarioSap(True), "L7654321": UsuarioSap(True)}, {"L7654321": ("ZBRCOORD",)})
+    html = relatorio.montar_html(res, [], AGORA)
+    assert relatorio.situacao(res) == "AVISO" and request.criadas == []
+    assert "JÁ EXISTE" in html and "não verificado" in html and "já existe no E1P" in html
+    assert relatorio.assunto(res) == "[gestao-usuarios] Criação L1234567 - AVISO (ref. L7654321)"
+
+
+def test_email_da_criacao_com_referencia_inexistente_ou_sem_zbr_ou_varios():
+    res, *_ = _rodar_com({}, {})
+    html = relatorio.montar_html(res, [], AGORA)
+    assert relatorio.situacao(res) == "AVISO" and "NÃO EXISTE" in html and "não verificado" in html
+
+    res, *_ = _rodar_com({"L7654321": UsuarioSap(True)}, {})
+    assert relatorio.situacao(res) == "AVISO" and "NENHUM" in relatorio.montar_html(res, [], AGORA)
+
+    res, *_ = _rodar_com({"L7654321": UsuarioSap(True)}, {"L7654321": ("ZBRA", "ZBRB")})
+    html = relatorio.montar_html(res, [], AGORA)
+    assert relatorio.situacao(res) == "AVISO" and "VÁRIOS" in html and "ZBRA, ZBRB" in html
+    assert relatorio.assunto(res) == "[gestao-usuarios] Criação L1234567 - AVISO (ZBR ZBRA, ZBRB)"
+
+
+def test_email_da_criacao_com_leitura_incerta():
+    res, *_ = _rodar_com({"L1234567": UsuarioSap(None)}, {})
+    html = relatorio.montar_html(res, [], AGORA)
+    assert relatorio.situacao(res) == "AVISO" and "NÃO CONFIRMADO" in html
+
+
+def test_request_criada_aparece_na_situacao_e_no_texto():
+    res, *_ = _rodar_com({"L7654321": UsuarioSap(True)}, {"L7654321": ("ZBRCOORD",)}, request_grc=True)
+    assert res.acao_request is AcaoRequest.CRIAR
+    assert relatorio.situacao(res) == "REQUEST CRIADA" and "Request de criação criada" in relatorio.montar_html(res, [], AGORA)

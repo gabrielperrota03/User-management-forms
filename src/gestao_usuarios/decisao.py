@@ -53,6 +53,7 @@ def alvo_da_simulacao(s: Solicitacao) -> str:
 
 class AcaoRequest(StrEnum):
     NAO_SE_APLICA = "nao_se_aplica"                        # modificação: não há request
+    DESLIGADA = "desligada"                                # criação com a request no GRC desligada (request.ligada: false): só o e-mail
     CRIAR = "criar"
     SIMULAR = "simular"                                    # dry-run: o relatório mostra "criaria"
     BARRADA_USUARIO_EXISTE = "barrada_usuario_existe"

@@ -63,7 +63,7 @@ class ConexoesFalsas:
 def escrever(pasta: Path, nome: str, **campos) -> Path:
     pasta.mkdir(parents=True, exist_ok=True)
     arq = pasta / nome
-    arq.write_text(json.dumps(resposta(transacoes="FB01", **campos)), encoding="utf-8")
+    arq.write_text(json.dumps(resposta(**{"transacoes": "FB01", **campos})), encoding="utf-8")
     return arq
 
 
@@ -114,13 +114,13 @@ class ConexoesComRequest(ConexoesFalsas):
         return self.request
 
 
-def _criacao(tmp_path, executar, request, **campos):
+def _criacao(tmp_path, executar, request, request_grc=True, **campos):
     from gestao_usuarios.zbr import ListaZbr
     arq = escrever(tmp_path / "sol", "a.json", tipo="Criação de usuário", usuario_referencia="L7654321", **campos)
     sap = SapFalso({"L7654321": UsuarioSap(True)}, {"FB01": ("Y-BRF-FB01-POST_DOCUMENT",)})
     con = ConexoesComRequest(request, sap=sap, risco=GrcRiscoFalso())
     manifesto = Manifesto(tmp_path / "estado.json")
-    saida = rodada([arq], manifesto=manifesto, conexoes=con, regras=RegrasSeguranca(), opcoes=Opcoes(executar=executar),
+    saida = rodada([arq], manifesto=manifesto, conexoes=con, regras=RegrasSeguranca(), opcoes=Opcoes(executar=executar, request_grc=request_grc),
                    pasta_relatorios=tmp_path / "rel", pasta_trabalho=tmp_path / "trab",
                    lista_zbr=ListaZbr(AGORA, {"L7654321": ("ZBRCOORD",)}), agora=AGORA)
     return saida, manifesto, con
@@ -130,7 +130,7 @@ def test_criacao_executar_passa_pela_rodada_e_grava_o_numero(tmp_path):
     request = GrcRequestFalso()
     saida, man, con = _criacao(tmp_path, True, request, igg="L1234567")
     assert request.criadas == [("L1234567", "ZBRCOORD", "Criação de usuário L1234567 (ZBR ZBRCOORD) - Forms 42")]
-    assert saida.resumos[0].situacao == "OK" and man.entradas["42"].request == "700001" and man.entradas["42"].fase is Fase.CONCLUIDA
+    assert saida.resumos[0].situacao == "REQUEST CRIADA" and man.entradas["42"].request == "700001" and man.entradas["42"].fase is Fase.CONCLUIDA
     assert "700001" in saida.resumos[0].relatorio.read_text(encoding="utf-8")
 
 
@@ -257,3 +257,13 @@ def test_prints_alem_do_teto_ficam_so_na_pasta(tmp_path, monkeypatch):
     monkeypatch.setattr(relatorio, "MAX_PRINTS_EMBUTIDOS", 99)
     monkeypatch.setattr(relatorio, "MAX_BYTES_EMBUTIDOS", 25)
     assert [u is not None for _, u in relatorio._embutir(pngs)] == [True, True, False, False]
+
+
+def test_criacao_com_a_request_desligada_vira_so_o_email_e_fica_concluida(tmp_path):
+    request = GrcRequestFalso()
+    saida, man, con = _criacao(tmp_path, True, request, request_grc=False, igg="L1234567", transacoes="")
+    assert saida.resumos[0].situacao == "PARA CRIAR" and saida.codigo == 0
+    assert request.criadas == [] and request.ensaios == [] and "request" not in con.abertas and "grc" not in con.abertas
+    assert man.entradas["42"].fase is Fase.CONCLUIDA and man.entradas["42"].request is None   # não volta na próxima rodada
+    html = saida.resumos[0].relatorio.read_text(encoding="utf-8")
+    assert "Pedido de criação de usuário SAP (E1P)" in html and "ZBRCOORD" in html

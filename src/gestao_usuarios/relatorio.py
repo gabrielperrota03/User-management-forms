@@ -26,17 +26,29 @@ MAX_BYTES_EMBUTIDOS = 4_000_000          # PNG somados (o base64 cresce ~33%); a
 CORES = {"Critical": "#b00020", "High": "#d35400", "Medium": "#b7950b", "Low": "#2e86c1"}
 
 
+COR_SITUACAO = {"OK": "#1e8449", "CONFLITO": "#b00020", "AVISO": "#b7950b", "RECUSADA": "#555",
+                "PARA CRIAR": "#2e86c1", "REQUEST CRIADA": "#1e8449"}
+_FALHAS_DA_REQUEST = (AcaoRequest.FALHOU_SUBMIT, AcaoRequest.BARRADA_FORMULARIO, AcaoRequest.BARRADA_USUARIO_EXISTE,
+                      AcaoRequest.BARRADA_LEITURA_INCERTA)
+
+
 def situacao(res: Resultado) -> str:
-    """RECUSADA (guardas), AVISO (um humano decide), CONFLITO (algum risco), OK (sem risco)."""
+    """Modificação: RECUSADA, AVISO (um humano decide), CONFLITO (algum risco) ou OK (sem risco).
+    Criação: RECUSADA, AVISO, CONFLITO, PARA CRIAR (tudo conferido; a request é à mão enquanto estiver desligada) ou REQUEST CRIADA."""
     if res.recusada:
         return "RECUSADA"
     if res.acao is not Acao.ANALISAR:
         return "AVISO"
-    if res.sem_analise:                                 # criação sem transações: nada foi analisado
-        return "AVISO" if res.acao_request in (AcaoRequest.FALHOU_SUBMIT, AcaoRequest.BARRADA_FORMULARIO) else "SEM ANÁLISE"
+    if res.solicitacao.tipo is Tipo.CRIACAO:
+        if res.acao_request in _FALHAS_DA_REQUEST:
+            return "AVISO"
+        if res.comparativo is not None:
+            if not res.comparativo.completo:
+                return "AVISO"
+            if res.comparativo.conflito:
+                return "CONFLITO"
+        return "REQUEST CRIADA" if res.acao_request is AcaoRequest.CRIAR else "PARA CRIAR"
     if res.comparativo is None or not res.comparativo.completo:
-        return "AVISO"
-    if res.acao_request in (AcaoRequest.FALHOU_SUBMIT, AcaoRequest.BARRADA_FORMULARIO):
         return "AVISO"
     if res.comparativo.conflito:
         return "CONFLITO"
@@ -45,15 +57,23 @@ def situacao(res: Resultado) -> str:
     return "OK"
 
 
+def _zbr_texto(res: Resultado) -> str:
+    return res.zbr or (", ".join(res.zbrs) if res.zbrs else "")
+
+
 def assunto(res: Resultado) -> str:
     s = res.solicitacao
-    tipo = "Criação" if s.tipo is Tipo.CRIACAO else "Modificação"
-    return f"{PREFIXO_ASSUNTO} {tipo} {s.igg} - {situacao(res)} ({', '.join(s.transacoes) or 'sem transações'})"
+    if s.tipo is Tipo.CRIACAO:
+        detalhe = f"ZBR {_zbr_texto(res)}" if _zbr_texto(res) else f"ref. {s.usuario_referencia or '?'}"
+        return f"{PREFIXO_ASSUNTO} Criação {s.igg} - {situacao(res)} ({detalhe})"
+    return f"{PREFIXO_ASSUNTO} Modificação {s.igg} - {situacao(res)} ({', '.join(s.transacoes) or 'sem transações'})"
 
 
 def _texto_request(res: Resultado) -> str:
     return {
         AcaoRequest.NAO_SE_APLICA: "",
+        AcaoRequest.DESLIGADA: "A request <b>não foi aberta</b> no GRC (desligado por enquanto: este e-mail é só o aviso). "
+                               "Abrir à mão com o ZBR indicado acima.",
         AcaoRequest.CRIAR: f"Request de criação criada: <b>{escape(res.request or '')}</b>",
         AcaoRequest.SIMULAR: "Dry-run: a request de criação <b>seria criada</b> (rode com --executar).",
         AcaoRequest.BARRADA_USUARIO_EXISTE: "Request NÃO criada: o usuário passou a existir no E1P.",
@@ -67,73 +87,159 @@ def _texto_request(res: Resultado) -> str:
     }[res.acao_request]
 
 
-def montar_html(res: Resultado, prints: list[tuple[str, str | None]], gerado_em: datetime) -> str:
-    """`prints` = [(nome do arquivo, data URI do PNG ou None se passou do teto)]."""
-    s = res.solicitacao
+# ------------------------------------------------------------------ blocos comuns
+def _abrir(res: Resultado, titulo: str) -> str:
     sit = situacao(res)
-    cor = {"OK": "#1e8449", "CONFLITO": "#b00020", "AVISO": "#b7950b", "RECUSADA": "#555", "SEM ANÁLISE": "#2e86c1"}[sit]
-    p = [f"""<html><head><meta charset="utf-8"><title>{escape(assunto(res))}</title><style>
+    cor = COR_SITUACAO[sit]
+    return f"""<html><head><meta charset="utf-8"><title>{escape(assunto(res))}</title><style>
 body{{font-family:Segoe UI,Arial,sans-serif;font-size:13px;color:#222}} table{{border-collapse:collapse;margin:6px 0 14px}}
 td,th{{border:1px solid #ccc;padding:4px 8px;text-align:left;vertical-align:top}} th{{background:#f2f2f2}}
 .sit{{display:inline-block;padding:3px 10px;color:#fff;background:{cor};border-radius:3px;font-weight:bold}}
 </style></head><body>
-<h2>Solicitação de acesso SAP (E1P) <span class="sit">{sit}</span></h2>
-<table>
-<tr><th>Tipo</th><td>{"Criação de usuário" if s.tipo is Tipo.CRIACAO else "Modificação de acesso"}</td></tr>
-<tr><th>IGG</th><td>{escape(s.igg)}</td></tr>"""]
-    if s.tipo is Tipo.CRIACAO:
-        p.append(f"<tr><th>Usuário de referência</th><td>{escape(s.usuario_referencia or '')}"
-                 f"{' (ZBR ' + escape(res.zbr) + ')' if res.zbr else ''}</td></tr>")
-    p.append(f"""<tr><th>Transações</th><td>{escape(', '.join(s.transacoes)) or '(nenhuma)'}</td></tr>
-<tr><th>Justificativa</th><td>{escape(s.justificativa)}</td></tr>
-<tr><th>Solicitante</th><td>{escape(s.solicitante_nome)} &lt;{escape(s.solicitante_email)}&gt;</td></tr>
-<tr><th>Enviado em</th><td>{escape(s.enviado_em or '')}</td></tr>
-<tr><th>Resposta do Forms</th><td>{escape(s.id_resposta)}</td></tr>
-</table>""")
+<h2>{titulo} <span class="sit">{sit}</span></h2>"""
+
+
+def _tabela(linhas: list[tuple[str, str]]) -> str:
+    """Linhas (rótulo, HTML já escapado)."""
+    return "<table>" + "".join(f"<tr><th>{r}</th><td>{v}</td></tr>" for r, v in linhas) + "</table>"
+
+
+def _dados_do_pedido(res: Resultado) -> list[tuple[str, str]]:
+    s = res.solicitacao
+    return [("Justificativa", escape(s.justificativa)),
+            ("Solicitante", f"{escape(s.solicitante_nome)} &lt;{escape(s.solicitante_email)}&gt;"),
+            ("Enviado em", escape(s.enviado_em or "")),
+            ("Resposta do Forms", escape(s.id_resposta))]
+
+
+def _bloco_recusa(res: Resultado) -> str:
+    return "<h3>Recusada pelas regras de segurança</h3><ul>" + "".join(f"<li>{escape(m)}</li>" for m in res.recusa) + "</ul>"
+
+
+def _bloco_avisos(res: Resultado) -> str:
+    return "<h3>Avisos</h3><ul>" + "".join(f"<li>{escape(a)}</li>" for a in res.avisos) + "</ul>" if res.avisos else ""
+
+
+def _bloco_analise(res: Resultado) -> str:
+    if res.comparativo is None:
+        return ""
+    p = [f"<h3>Análise de risco (GRC, simulação em {escape(res.alvo_simulacao or '')}, Rule Set EP - SOD 2019, "
+         "só riscos trazidos pela role)</h3>"]
+    for t, lista in res.comparativo.por_transacao.items():
+        p.append(f"<h4>{escape(t)}</h4>")
+        if not lista:
+            p.append("<p>Nenhuma single role dá acesso a esta transação.</p>")
+            continue
+        rec = res.comparativo.recomendada(t)
+        p.append("<table><tr><th>Single role</th><th>Críticos</th><th>Detalhe</th></tr>")
+        for r in lista:
+            c = r.contagem()
+            marca = " ★ menor risco" if len(lista) > 1 and rec is not None and r is rec else ""
+            if r.erro:
+                detalhe = f"<i>simulação falhou: {escape(r.erro)}</i>"
+            elif r.riscos:
+                detalhe = "<br>".join(f"<b style='color:{CORES.get(x.nivel, '#222')}'>{escape(x.id)}</b> "
+                                      f"({escape(x.nivel)}) {escape(x.descricao)}" for x in r.riscos)
+            else:
+                detalhe = "sem risco"
+            p.append(f"<tr><td>{escape(r.role)}{marca}</td><td>{'—' if r.erro else c['Critical']}</td><td>{detalhe}</td></tr>")
+        p.append("</table>")
+    return "".join(p)
+
+
+def _bloco_evidencias(prints: list[tuple[str, str | None]]) -> str:
+    if not prints:
+        return ""
+    p = ["<h3>Evidências</h3>"]
+    for nome, uri in prints:
+        if uri:
+            p.append(f"<p><b>{escape(nome)}</b><br><img src=\"{uri}\" style=\"width:100%;max-width:1700px;border:1px solid #ccc\"></p>")
+        else:
+            p.append(f"<p><b>{escape(nome)}</b>: não embutida (limite do e-mail); está na pasta do relatório.</p>")
+    return "".join(p)
+
+
+def _rodape(gerado_em: datetime) -> str:
+    return f"<p style='color:#888'>Gerado em {gerado_em:%d/%m/%Y %H:%M} pela automação User-management-forms.</p></body></html>"
+
+
+# ------------------------------------------------------------------ modificação
+def _html_modificacao(res: Resultado, prints: list[tuple[str, str | None]], gerado_em: datetime) -> str:
+    s = res.solicitacao
+    p = [_abrir(res, "Solicitação de acesso SAP (E1P)"),
+         _tabela([("Tipo", "Modificação de acesso"), ("IGG", escape(s.igg)),
+                  ("Transações", escape(", ".join(s.transacoes)) or "(nenhuma)"), *_dados_do_pedido(res)])]
     if res.recusa:
-        p.append("<h3>Recusada pelas regras de segurança</h3><ul>" + "".join(f"<li>{escape(m)}</li>" for m in res.recusa) + "</ul>")
+        p.append(_bloco_recusa(res))
     elif res.acao is not Acao.ANALISAR:
         p.append(f"<h3>Não analisada</h3><p>{escape(res.motivo)}</p>")
-    if res.avisos:
-        p.append("<h3>Avisos</h3><ul>" + "".join(f"<li>{escape(a)}</li>" for a in res.avisos) + "</ul>")
-    if res.sem_analise:
-        p.append("<h3>Análise de risco</h3><p>Nenhuma transação foi pedida (a criação usa o perfil do usuário de referência): "
-                 "<b>não houve análise de risco</b>.</p>")
-    if res.comparativo is not None:
-        p.append(f"<h3>Análise de risco (GRC, simulação em {escape(res.alvo_simulacao or '')}, Rule Set EP - SOD 2019, "
-                 "só riscos trazidos pela role)</h3>")
-        for t, lista in res.comparativo.por_transacao.items():
-            p.append(f"<h4>{escape(t)}</h4>")
-            if not lista:
-                p.append("<p>Nenhuma single role dá acesso a esta transação.</p>")
-                continue
-            rec = res.comparativo.recomendada(t)
-            p.append("<table><tr><th>Single role</th><th>Críticos</th><th>Detalhe</th></tr>")
-            for r in lista:
-                c = r.contagem()
-                marca = " ★ menor risco" if len(lista) > 1 and rec is not None and r is rec else ""
-                if r.erro:
-                    detalhe = f"<i>simulação falhou: {escape(r.erro)}</i>"
-                elif r.riscos:
-                    detalhe = "<br>".join(f"<b style='color:{CORES.get(x.nivel, '#222')}'>{escape(x.id)}</b> "
-                                          f"({escape(x.nivel)}) {escape(x.descricao)}" for x in r.riscos)
-                else:
-                    detalhe = "sem risco"
-                p.append(f"<tr><td>{escape(r.role)}{marca}</td><td>{'—' if r.erro else c['Critical']}</td><td>{detalhe}</td></tr>")
-            p.append("</table>")
-    req = _texto_request(res)
-    if req:
-        p.append(f"<h3>Request no GRC</h3><p>{req}</p>")
-    if prints:
-        p.append("<h3>Evidências</h3>")
-        for nome, uri in prints:
-            if uri:
-                p.append(f"<p><b>{escape(nome)}</b><br><img src=\"{uri}\" style=\"width:100%;max-width:1700px;border:1px solid #ccc\"></p>")
-            else:
-                p.append(f"<p><b>{escape(nome)}</b>: não embutida (limite do e-mail); está na pasta do relatório.</p>")
-    p.append(f"<p style='color:#888'>Gerado em {gerado_em:%d/%m/%Y %H:%M} pela automação User-management-forms.</p>"
-             "</body></html>")
-    return "\n".join(p)
+    p += [_bloco_avisos(res), _bloco_analise(res), _bloco_evidencias(prints), _rodape(gerado_em)]
+    return "\n".join(x for x in p if x)
+
+
+# ------------------------------------------------------------------ criação
+def _estado(rotulo: str, cor: str, detalhe: str = "") -> str:
+    return f"<b style='color:{cor}'>{rotulo}</b>" + (f" {escape(detalhe)}" if detalhe else "")
+
+
+def _conferencias_da_criacao(res: Resultado) -> list[tuple[str, str]]:
+    """O que foi conferido no E1P para a criação: o usuário é novo? a referência existe? tem um ZBR só?"""
+    ok, ruim, incerto, nada = "#1e8449", "#b00020", "#b7950b", "#888"
+    u, ref, zbrs = res.usuario, res.referencia, res.zbrs
+    if u is None:
+        novo = _estado("não verificado", nada)
+    elif u.existe is None:
+        novo = _estado("NÃO CONFIRMADO", incerto, "(leitura incerta no E1P)")
+    elif u.existe:
+        novo = _estado("JÁ EXISTE", ruim, "no E1P: verificar se o pedido é uma modificação")
+    else:
+        novo = _estado("OK", ok, "não existe no E1P")
+    if ref is None:
+        existe_ref = _estado("não verificado", nada)
+    elif ref.existe is None:
+        existe_ref = _estado("NÃO CONFIRMADO", incerto, "(leitura incerta no E1P)")
+    elif ref.existe:
+        existe_ref = _estado("OK", ok, "existe no E1P")
+    else:
+        existe_ref = _estado("NÃO EXISTE", ruim, "no E1P")
+    if zbrs is None:
+        zbr = _estado("não verificado", nada)
+    elif len(zbrs) == 1:
+        zbr = _estado("OK", ok, zbrs[0])
+    elif not zbrs:
+        zbr = _estado("NENHUM", ruim, "ZBR encontrado para a referência")
+    else:
+        zbr = _estado("VÁRIOS", ruim, ", ".join(zbrs) + ": escolher à mão")
+    return [("O novo usuário ainda não existe no E1P", novo), ("O usuário de referência existe no E1P", existe_ref),
+            ("ZBR do usuário de referência", zbr)]
+
+
+def _html_criacao(res: Resultado, prints: list[tuple[str, str | None]], gerado_em: datetime) -> str:
+    s = res.solicitacao
+    zbr = _zbr_texto(res)
+    p = [_abrir(res, "Pedido de criação de usuário SAP (E1P)"),
+         "<h3>Pedido</h3>" + _tabela([("Novo usuário (IGG)", escape(s.igg)),
+                                      ("Usuário de referência", escape(s.usuario_referencia or "")),
+                                      ("Perfil a atribuir (ZBR)", escape(zbr) if zbr else "—"), *_dados_do_pedido(res)])]
+    if res.recusa:
+        p.append(_bloco_recusa(res))
+    else:
+        p.append("<h3>Conferências no E1P</h3>" + _tabela(_conferencias_da_criacao(res)))
+        if res.acao is not Acao.ANALISAR:
+            p.append(f"<h3>Resultado</h3><p>{escape(res.motivo)}</p>")
+        else:
+            conferido = (f"Tudo conferido: o usuário {escape(s.igg)} pode ser criado com o ZBR {escape(zbr)} "
+                         f"(perfil de {escape(s.usuario_referencia or '')}). ")
+            p.append(f"<h3>Resultado</h3><p>{conferido}{_texto_request(res)}</p>")
+    p += [_bloco_avisos(res), _bloco_analise(res), _bloco_evidencias(prints), _rodape(gerado_em)]
+    return "\n".join(x for x in p if x)
+
+
+def montar_html(res: Resultado, prints: list[tuple[str, str | None]], gerado_em: datetime) -> str:
+    """`prints` = [(nome do arquivo, data URI do PNG ou None se passou do teto)]. Criação e modificação têm estruturas próprias."""
+    if res.solicitacao.tipo is Tipo.CRIACAO:
+        return _html_criacao(res, prints, gerado_em)
+    return _html_modificacao(res, prints, gerado_em)
 
 
 def _nome_pasta(res: Resultado, gerado_em: datetime) -> str:

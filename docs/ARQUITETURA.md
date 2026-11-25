@@ -13,7 +13,8 @@ vigia ligada no logon do Windows.
 
 Alguém preenche o Forms pedindo a **criação** de um usuário (IGG novo + usuário de referência) ou a **modificação** de um IGG
 existente com uma ou mais **transações** (ex.: `FB01`). A criação **não pede transações**: o perfil é o ZBR da referência e o
-relatório sai como `SEM ANÁLISE` (sem simulação de risco; a request ainda passa pelas guardas e pelo dry-run). Para cada resposta a aplicação:
+o e-mail sai como `PARA CRIAR` (sem simulação de risco). **Por enquanto a criação não abre request no GRC** (`request.ligada: false`,
+analista, 25/11/2026): nem a request nem o ensaio do formulário; o e-mail é só o aviso e a request é aberta à mão com o ZBR indicado. Para cada resposta a aplicação:
 
 1. **Valida** a resposta (formato do IGG, das transações, remetente da organização, IGG protegido).
 2. **Criação: confere no E1P (somente leitura, `BAPI_USER_GET_DETAIL` por RFC; SU01D por SAP GUI só com `sap.modo_usuario: gui`)** se o usuário existe: se **já existe** → **não cria nada**, avisa no relatório
@@ -156,6 +157,10 @@ em qualquer candidata; o assunto do email ganha `CONFLITO`. A aplicação **reco
 
 ## 7. Request de criação no GRC (`grc_request.py`)
 
+> **Desligada por enquanto** (`request.ligada: false` no config, 25/11/2026): a rotina não abre o GRC na criação, nem em dry-run;
+> o resultado é `AcaoRequest.DESLIGADA` e o e-mail diz que a request não foi aberta. O que segue descreve o comportamento com
+> `request.ligada: true`.
+
 Só quando **tipo = Criação** e o usuário **não existe** no E1P (SU01D lida no início, de novo antes de decidir e uma terceira vez
 com o formulário já pronto, imediatamente antes do Submit). É a **única escrita** da aplicação no GRC.
 
@@ -223,7 +228,13 @@ Na dúvida a aplicação **não age**: vira aviso no relatório e um humano deci
   `AAAAMMDD_HHMMSS_<assunto>.html` (prints embutidos no corpo, com teto de 16 prints e ~4 MB) e os PNG originais. **Só os prints do
   GRC** entram (resultado de cada simulação e formulário da request): SU01D e SUIM **não geram print** (decisão do analista,
   23/11/2026; `SapE1PReal(tirar_prints=True)` liga de volta para depuração).
-- Assunto: `[gestao-usuarios] <Criação|Modificação> <IGG> - <OK|CONFLITO|AVISO|RECUSADA|SEM ANÁLISE> (<transações ou "sem transações">)`.
+- **Dois formatos de e-mail** (`relatorio.py`), cada um com os seus elementos:
+  - **Modificação:** *Solicitação de acesso SAP (E1P)*: tipo, IGG, transações, justificativa, solicitante, avisos, análise de risco
+    (quadro de Críticos + detalhe) e os prints do GRC. Assunto: `[gestao-usuarios] Modificação <IGG> - <OK|CONFLITO|AVISO|RECUSADA> (<transações>)`.
+  - **Criação:** *Pedido de criação de usuário SAP (E1P)*: **Pedido** (novo IGG, usuário de referência, ZBR a atribuir, justificativa,
+    solicitante), **Conferências no E1P** (o novo usuário não existe? a referência existe? há um ZBR só?, cada uma com OK/NÃO/NÃO CONFIRMADO/
+    não verificado) e **Resultado** (o que fazer: criar à mão com o ZBR X, ou o motivo do aviso). Sem transações nem análise de risco.
+    Assunto: `[gestao-usuarios] Criação <IGG> - <PARA CRIAR|REQUEST CRIADA|AVISO|CONFLITO|RECUSADA> (ZBR <zbr> | ref. <referência>)`.
 - Fluxo do Power Automate **"Gestao Usuarios - Relatorio por email"** (`docs/forms-e-fluxos.md`, seção 3): criado e **ligado** (testado em 23/11/2026);
   ao aparecer o HTML na pasta, envia o corpo por e-mail só para o analista (sem CC).
 

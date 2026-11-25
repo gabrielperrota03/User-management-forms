@@ -41,7 +41,8 @@ def _opcoes(cfg: dict, executar: bool) -> Opcoes:
     r, z = cfg.get("request") or {}, cfg.get("zbr") or {}
     return Opcoes(executar=executar, max_requests=int(r.get("max_por_rodada", 3)),
                   bloquear_com_conflito=bool(r.get("bloquear_com_conflito", True)),
-                  zbr_idade_max_dias=float(z.get("idade_max_dias", 8)), zbr_prefixo=z.get("prefixo", "ZBR"))
+                  zbr_idade_max_dias=float(z.get("idade_max_dias", 8)), zbr_prefixo=z.get("prefixo", "ZBR"),
+                  request_grc=bool(r.get("ligada", False)))
 
 
 def executar_rodada(cfg: dict, arquivos: list[Path], manifesto: Manifesto, executar: bool, relatorios: Path) -> Saida:

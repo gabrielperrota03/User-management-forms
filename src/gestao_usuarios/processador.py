@@ -23,6 +23,7 @@ class Opcoes:
     bloquear_com_conflito: bool = True
     zbr_idade_max_dias: float = 8
     zbr_prefixo: str = "ZBR"
+    request_grc: bool = True               # False: a criação NÃO toca no GRC (nem o ensaio do formulário); só o e-mail de aviso
 
 
 @dataclass
@@ -39,6 +40,8 @@ class Resultado:
     request: str | None = None
     avisos: list[str] = field(default_factory=list)
     sem_analise: bool = False              # criação sem transações pedidas: não há o que simular
+    referencia: UsuarioSap | None = None   # criação: leitura do usuário de referência no E1P
+    zbrs: tuple[str, ...] | None = None    # criação: ZBR(s) do usuário de referência (None = não chegou a procurar)
 
     @property
     def recusada(self) -> bool:
@@ -62,6 +65,8 @@ def processar(s: Solicitacao, *, regras: RegrasSeguranca, sap: SapE1P, grc_risco
         if referencia.existe:
             zbrs = resolver_zbr(s.usuario_referencia, lista_zbr, fonte_zbr, agora,
                                 opcoes.zbr_idade_max_dias, opcoes.zbr_prefixo)
+    res.referencia = referencia
+    res.zbrs = tuple(zbrs or ()) if referencia is not None and referencia.existe else None   # None = nem procurou
     res.acao, res.motivo = decidir_entrada(s, res.usuario, referencia, zbrs)
     if res.acao is not Acao.ANALISAR:
         return res
@@ -97,13 +102,15 @@ def processar(s: Solicitacao, *, regras: RegrasSeguranca, sap: SapE1P, grc_risco
 def _fechar_sem_analise(res: Resultado, s: Solicitacao, sap: SapE1P, grc_request: GrcRequest, opcoes: Opcoes,
                         requests_criadas: int) -> Resultado:
     """Criação sem transações pedidas: nada a simular (sem conflito possível); segue direto para a decisão da request."""
-    res.avisos.append("nenhuma transação pedida: não houve análise de risco (o perfil é o ZBR do usuário de referência)")
     _decidir_e_criar(res, s, sap, grc_request, opcoes, requests_criadas, conflito=False, completa=True)
     return res
 
 
 def _decidir_e_criar(res: Resultado, s: Solicitacao, sap: SapE1P, grc_request: GrcRequest, opcoes: Opcoes,
                      requests_criadas: int, *, conflito: bool, completa: bool) -> None:
+    if not opcoes.request_grc:                          # por enquanto só o aviso: nada de GRC (nem o ensaio do formulário)
+        res.acao_request = AcaoRequest.DESLIGADA
+        return
     antes_do_submit = sap.usuario(s.igg)                # relido: alguém pode ter criado o usuário nesse meio tempo
     res.acao_request = decidir_request(
         s, antes_do_submit, conflito=conflito, analise_completa=completa,

@@ -74,6 +74,7 @@ o97:
   connector: 'E1PCLNT010'
 
 request:
+  ligada: false                      # criação: false = só o e-mail de aviso, sem request nem ensaio no GRC (analista, 25/11/2026)
   max_por_rodada: 3                  # disjuntor
   bloquear_com_conflito: true        # a confirmar com o analista
 
