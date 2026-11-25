@@ -38,6 +38,7 @@ class Resultado:
     acao_request: AcaoRequest = AcaoRequest.NAO_SE_APLICA
     request: str | None = None
     avisos: list[str] = field(default_factory=list)
+    sem_analise: bool = False              # criação sem transações pedidas: não há o que simular
 
     @property
     def recusada(self) -> bool:
@@ -71,6 +72,9 @@ def processar(s: Solicitacao, *, regras: RegrasSeguranca, sap: SapE1P, grc_risco
         res.avisos.append(f"não deu para confirmar se {s.igg} está bloqueado no E1P (aba Logon Data não lida por inteiro)")
 
     res.alvo_simulacao = alvo_da_simulacao(s)
+    if not s.transacoes:                                # criação: o Forms não pede transações, o perfil é o ZBR da referência
+        res.sem_analise = True
+        return _fechar_sem_analise(res, s, sap, grc_request, opcoes, requests_criadas)
     resultados: list[ResultadoRole] = []
     for t in s.transacoes:
         for c in sap.singles_por_transacao(t):
@@ -88,14 +92,28 @@ def processar(s: Solicitacao, *, regras: RegrasSeguranca, sap: SapE1P, grc_risco
         res.avisos.append("alguma simulação falhou: análise incompleta")
 
     if s.tipo is Tipo.CRIACAO:
-        antes_do_submit = sap.usuario(s.igg)            # relido: alguém pode ter criado o usuário nesse meio tempo
-        res.acao_request = decidir_request(
-            s, antes_do_submit, conflito=res.comparativo.conflito, analise_completa=res.comparativo.completo,
-            bloquear_com_conflito=opcoes.bloquear_com_conflito, executar=opcoes.executar,
-            requests_criadas=requests_criadas, max_requests=opcoes.max_requests)
-        if res.acao_request in (AcaoRequest.CRIAR, AcaoRequest.SIMULAR):
-            _criar_ou_ensaiar(res, s, sap, grc_request)
+        _decidir_e_criar(res, s, sap, grc_request, opcoes, requests_criadas,
+                         conflito=res.comparativo.conflito, completa=res.comparativo.completo)
     return res
+
+
+def _fechar_sem_analise(res: Resultado, s: Solicitacao, sap: SapE1P, grc_request: GrcRequest, opcoes: Opcoes,
+                        requests_criadas: int) -> Resultado:
+    """Criação sem transações pedidas: nada a simular (sem conflito possível); segue direto para a decisão da request."""
+    res.avisos.append("nenhuma transação pedida: não houve análise de risco (o perfil é o ZBR do usuário de referência)")
+    _decidir_e_criar(res, s, sap, grc_request, opcoes, requests_criadas, conflito=False, completa=True)
+    return res
+
+
+def _decidir_e_criar(res: Resultado, s: Solicitacao, sap: SapE1P, grc_request: GrcRequest, opcoes: Opcoes,
+                     requests_criadas: int, *, conflito: bool, completa: bool) -> None:
+    antes_do_submit = sap.usuario(s.igg)                # relido: alguém pode ter criado o usuário nesse meio tempo
+    res.acao_request = decidir_request(
+        s, antes_do_submit, conflito=conflito, analise_completa=completa,
+        bloquear_com_conflito=opcoes.bloquear_com_conflito, executar=opcoes.executar,
+        requests_criadas=requests_criadas, max_requests=opcoes.max_requests)
+    if res.acao_request in (AcaoRequest.CRIAR, AcaoRequest.SIMULAR):
+        _criar_ou_ensaiar(res, s, sap, grc_request)
 
 
 def _criar_ou_ensaiar(res: Resultado, s: Solicitacao, sap: SapE1P, grc_request: GrcRequest) -> None:

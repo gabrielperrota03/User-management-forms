@@ -2,57 +2,62 @@
 
 ## 1. O formulário
 
-Nome sugerido: **"Solicitação de acesso SAP (E1P)"**. Configurações: *Only people in my organization can respond*,
-*Record name* ligado (o nome e o email do solicitante vêm do login, sem campo), uma resposta por envio.
+Formulário já montado no Microsoft Forms (conta do analista). Configurações: só pessoas da organização respondem; o email do
+solicitante vem do login (`responder`), sem campo. Ele **ramifica por seção**:
 
-| # | Pergunta | Tipo | Obrigatória | Regra |
-|---|---|---|---|---|
-| 1 | Tipo de solicitação | Escolha: `Criação de usuário`, `Modificação de acesso` | sim | ramifica |
-| 2 | Usuário de referência (IGG) | Texto curto | sim | **só aparece em Criação** (ramificação) |
-| 3 | IGG do usuário | Texto curto | sim | letra + 7 dígitos (ex.: L1234567), conferido pelo sistema |
-| 4 | Transações | Texto longo | sim | uma ou várias, separadas por vírgula, `;` ou linha (ex.: FB01, FB02); máx. 10 |
-| 5 | Justificativa | Texto longo | sim | — |
+| Seção | Pergunta | Obrigatória | Regra |
+|---|---|---|---|
+| (início) | Tipo de solicitação: `Criação de usuário` / `Modificação de acesso` | sim | escolhe a seção |
+| Criação de usuário | IGG do novo usuário | sim | letra + 7 dígitos (L1234567), conferido pelo sistema |
+| | Usuário de referência (IGG) | sim | o ZBR dele (lista semanal do O97) é o perfil do novo usuário |
+| | Justificativa | sim | — |
+| Modificação de acesso | IGG do usuário | sim | idem |
+| | Transações | sim | uma ou várias, separadas por vírgula, `;` ou linha; máx. 10 |
+| | Justificativa | sim | — |
 
-Ramificação (*Branching*): na pergunta 1, `Criação de usuário` → pergunta 2; `Modificação de acesso` → pergunta 3.
-A referência vem antes do IGG porque no Forms só pergunta de escolha ramifica: com o IGG no meio, não haveria como mostrar a
-referência só na Criação sem duplicar a pergunta do IGG.
+**A criação não pede transações**: o perfil é o ZBR do usuário de referência. Sem transações não há o que simular: o relatório
+sai com a situação `SEM ANÁLISE` e a request de criação segue as demais guardas (ver `docs/ARQUITETURA.md`).
 
-O Forms não valida formato de texto (só números): IGG, transações e limites são conferidos pelo sistema (`seguranca.py`).
-O Forms não tem API pública de criação: o formulário é montado à mão ou pelo Claude Cowork, com o prompt de
-`docs/prompt-cowork-forms.md`.
+O Forms não valida formato de texto: IGG, transações e limites são conferidos pelo sistema (`seguranca.py`). O Forms não tem
+API pública de criação: o formulário foi montado à mão (o prompt de `docs/prompt-cowork-forms.md` descreve o mesmo desenho).
 
-## 2. Fluxo "Gestao Usuarios - Resposta do Forms para SharePoint"
+### Chaves da resposta
+
+O fluxo grava a resposta **crua**: cada pergunta é uma chave com o ID que o Forms lhe deu. `resposta.py` (`CHAVES`, `ID_TIPO`)
+traduz os IDs; os nomes legíveis (`criacao_igg`, `modificacao_transacoes`, `igg`...) continuam valendo para testes e
+reprocessamento. Se o formulário for recriado ou ganhar pergunta, os IDs mudam: rodar o fluxo uma vez, ler a saída do
+*Compose* no histórico e atualizar `CHAVES`.
+
+| Chave no JSON | Conteúdo |
+|---|---|
+| `id_resposta` | Response Id (adicionado pelo *Compose*) |
+| `responder` | email do solicitante |
+| `submitDate` | envio, em UTC, `MM/dd/yyyy h:mm:ss tt` |
+| `re72ac69...` | tipo de solicitação |
+| `r1b4568cc...` / `r886c8288...` / `r4e7aee54...` | Criação: IGG / referência / justificativa |
+| `rd5822024...` / `rf821d5f8...` / `r4a2c00f9...` | Modificação: IGG / transações / justificativa |
+
+Há outras três chaves (`r40187b6...`, `rb6a15ffc...`, `r2e05578a...`) que vêm vazias e o sistema ignora. O `solicitante_nome`
+não vem do Forms (fica vazio).
+
+## 2. Fluxo "Gestao Usuarios - Resposta do Forms para SharePoint" (montado e LIGADO em 23/11/2026)
 
 Ambiente **CPX - EP - SAP_Automation - PROD**.
 
-1. *When a new response is submitted* (Microsoft Forms) → formulário acima.
+1. *When a new response is submitted* (Microsoft Forms) → o formulário acima.
 2. *Get response details* (mesmo formulário, `Response Id` do gatilho).
-3. *Compose* com o JSON abaixo (as chaves são as que `resposta.py` lê; os valores vêm do conteúdo dinâmico).
+3. *Compose*: `@{addProperty(outputs('Get_response_details')?['body'], 'id_resposta', triggerOutputs()?['body/resourceData/responseId'])}`
+   (a resposta crua mais o `id_resposta`).
 4. *Create file* (SharePoint, site TEPBR-FINANCE): pasta
-   `/1_9_SAP/1 - SOX/Insumos - Automação/Solicitacoes de Acesso/` +
-   `formatDateTime(convertFromUtc(formatDateTime(utcNow(),'yyyy-MM-ddTHH:mm:ssZ'),'E. South America Standard Time'),'MM_yy')`,
-   nome `concat(formatDateTime(convertFromUtc(formatDateTime(utcNow(),'yyyy-MM-ddTHH:mm:ssZ'),'E. South America Standard Time'),'yyyyMMdd_HHmmss'), '_', <Response Id>, '.json')`,
-   conteúdo = saída do *Compose*.
+   `/1_9_SAP/1 - SOX/Insumos - Automação/Solicitacoes de Acesso/@{formatDateTime(utcNow(), 'MM_yy')}`, nome
+   `@{formatDateTime(utcNow(), 'yyyyMMdd_HHmmss')}_@{<Response Id>}.json`, conteúdo `@{outputs('Compose')}`.
+   A pasta do mês é criada pelo próprio *Create file*; data e hora são em **UTC** (só dão nome ao arquivo).
 
-Atenção ao erro conhecido do `convertFromUtc` com `+00:00` (ver `docs/fluxos-power-automate.md` do sox-automation): sempre
-formatar a data antes de converter, como acima.
+O vigia lê a pasta inteira (`rglob`), então a subpasta do mês não importa. A conexão do Forms precisa estar ativa na conta
+que roda o fluxo; se o *OAuth* abrir em popup bloqueado, liberar popups no navegador.
 
-```json
-{
-  "id_resposta": "<Response Id>",
-  "enviado_em": "<Submission time>",
-  "solicitante_nome": "<Responders' Name>",
-  "solicitante_email": "<Responders' Email>",
-  "tipo": "<Tipo de solicitação>",
-  "igg": "<IGG do usuário>",
-  "usuario_referencia": "<Usuário de referência (IGG)>",
-  "transacoes": "<Transações>",
-  "justificativa": "<Justificativa>"
-}
-```
-
-Texto livre do respondente entra no JSON: no *Compose*, use o conteúdo dinâmico dentro das aspas (o Power Automate escapa).
-`resposta.py` também recusa JSON inválido (fase `RECUSADA`).
+Texto livre do respondente entra no JSON sem aspas montadas à mão (é a saída do Forms serializada pelo Power Automate), então o
+escape é dele. `resposta.py` ainda recusa JSON inválido (fase `RECUSADA`).
 
 ## 3. Fluxo "Gestao Usuarios - Relatorio por email" (montado e LIGADO em 23/11/2026)
 

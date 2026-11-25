@@ -83,13 +83,14 @@ def popup_permitido(texto: str | None, permitidos: tuple[str, ...]) -> bool:
     return bool(texto) and any(texto_confere(texto, p) for p in permitidos)
 
 
-_RE_OCULTAS = re.compile(r"(\d[\d.,]*)\s+roles?\s+with\s+missing\s+authori[sz]ation", re.I)
 
 
-def roles_ocultas(popup: str | None) -> int | None:
-    """'523 roles with missing authorization not displayed' -> 523. None = o popup não fala disso."""
-    m = _RE_OCULTAS.search(popup or "")
-    return int(re.sub(r"\D", "", m.group(1))) if m else None
+def com_nome_da_transacao(transacao: str, nomes: tuple[str, ...]) -> tuple[str, ...]:
+    """Single roles que levam o nome da transação (Y-BRF-FB01-POST_DOCUMENT para FB01), como palavra inteira: sem letra ou
+    número colado. Nenhuma assim -> todas as candidatas (decisão do analista, 23/11/2026: evita análises desnecessárias)."""
+    padrao = re.compile(r"(?<![A-Z0-9])" + re.escape(transacao.upper()) + r"(?![A-Z0-9])")
+    com_nome = tuple(n for n in nomes if padrao.search(n.upper()))
+    return com_nome or nomes
 
 
 def tipo_do_icone(icone: str) -> TipoRole:
@@ -172,11 +173,7 @@ class SuimRoles:
 
     def roles_por_transacao(self, transacao: str) -> tuple[RoleSuim, ...]:
         abrir_relatorio(self.sessao, self.c)
-        popup, grade = executar_busca(self.sessao, self.c, transacao)
-        ocultas = roles_ocultas(popup)
-        if ocultas:
-            self.avisos.append(f"SUIM ({transacao}): {ocultas} roles não exibidas por falta de autorização de quem roda; "
-                               "o resultado pode estar incompleto")
+        _, grade = executar_busca(self.sessao, self.c, transacao)
         _, linhas = sap_gui.ler_grade(grade)
         return extrair_roles(linhas, self.c)
 
@@ -189,4 +186,9 @@ class SuimRoles:
         if composites:
             self.avisos.append(f"SUIM ({transacao}): composites ignoradas, a análise usa só single roles: "
                                f"{', '.join(composites)}")
-        return tuple(r.nome for r in roles if r.tipo is TipoRole.SINGLE)
+        singles = tuple(r.nome for r in roles if r.tipo is TipoRole.SINGLE)
+        escolhidas = com_nome_da_transacao(transacao, singles)
+        if len(escolhidas) < len(singles):
+            self.avisos.append(f"SUIM ({transacao}): analisadas só as {len(escolhidas)} single roles com {transacao.upper()} "
+                               f"no nome; {len(singles) - len(escolhidas)} outras ignoradas")
+        return escolhidas

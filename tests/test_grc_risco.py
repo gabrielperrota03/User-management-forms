@@ -74,3 +74,19 @@ def test_estado_da_caixa_pelas_classes_reais():
 def test_botoes_proibidos(texto):
     with pytest.raises(wd.BotaoProibido):
         wd.clicar_botao(None, None, texto)
+
+
+def test_variante_vem_do_config():
+    from gestao_usuarios.grc_risco import ConfigGrcRisco
+    base = {"grc": {"url": "https://x"}}
+    assert ConfigGrcRisco.de_config(base).variante == "EP_SOD_2019_BRTEP"
+    assert ConfigGrcRisco.de_config({**base, "grc_risco": {"variante": ""}}).variante == ""     # vazio = preenche à mão
+
+
+def test_titulo_do_assistente_com_e_sem_variante():
+    from gestao_usuarios.grc_risco import titulo_confere
+    sim = "Simulation: User Level, Step  2  (Define Simulation Criteria)"
+    ra = "Risk Analysis : User Level, Step 2  (Define Simulation Criteria)"
+    assert titulo_confere(sim, 2) and titulo_confere(sim, 2, True)
+    assert not titulo_confere(ra, 2)                      # sem variante o rótulo trocado continua sendo estranho
+    assert titulo_confere(ra, 2, True) and not titulo_confere(ra, 3, True)

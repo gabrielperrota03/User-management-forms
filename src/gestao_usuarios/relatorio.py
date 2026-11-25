@@ -30,7 +30,11 @@ def situacao(res: Resultado) -> str:
     """RECUSADA (guardas), AVISO (um humano decide), CONFLITO (algum risco), OK (sem risco)."""
     if res.recusada:
         return "RECUSADA"
-    if res.acao is not Acao.ANALISAR or res.comparativo is None or not res.comparativo.completo:
+    if res.acao is not Acao.ANALISAR:
+        return "AVISO"
+    if res.sem_analise:                                 # criação sem transações: nada foi analisado
+        return "AVISO" if res.acao_request in (AcaoRequest.FALHOU_SUBMIT, AcaoRequest.BARRADA_FORMULARIO) else "SEM ANÁLISE"
+    if res.comparativo is None or not res.comparativo.completo:
         return "AVISO"
     if res.acao_request in (AcaoRequest.FALHOU_SUBMIT, AcaoRequest.BARRADA_FORMULARIO):
         return "AVISO"
@@ -44,7 +48,7 @@ def situacao(res: Resultado) -> str:
 def assunto(res: Resultado) -> str:
     s = res.solicitacao
     tipo = "Criação" if s.tipo is Tipo.CRIACAO else "Modificação"
-    return f"{PREFIXO_ASSUNTO} {tipo} {s.igg} - {situacao(res)} ({', '.join(s.transacoes)})"
+    return f"{PREFIXO_ASSUNTO} {tipo} {s.igg} - {situacao(res)} ({', '.join(s.transacoes) or 'sem transações'})"
 
 
 def _texto_request(res: Resultado) -> str:
@@ -67,7 +71,7 @@ def montar_html(res: Resultado, prints: list[tuple[str, str | None]], gerado_em:
     """`prints` = [(nome do arquivo, data URI do PNG ou None se passou do teto)]."""
     s = res.solicitacao
     sit = situacao(res)
-    cor = {"OK": "#1e8449", "CONFLITO": "#b00020", "AVISO": "#b7950b", "RECUSADA": "#555"}[sit]
+    cor = {"OK": "#1e8449", "CONFLITO": "#b00020", "AVISO": "#b7950b", "RECUSADA": "#555", "SEM ANÁLISE": "#2e86c1"}[sit]
     p = [f"""<html><head><meta charset="utf-8"><title>{escape(assunto(res))}</title><style>
 body{{font-family:Segoe UI,Arial,sans-serif;font-size:13px;color:#222}} table{{border-collapse:collapse;margin:6px 0 14px}}
 td,th{{border:1px solid #ccc;padding:4px 8px;text-align:left;vertical-align:top}} th{{background:#f2f2f2}}
@@ -80,7 +84,7 @@ td,th{{border:1px solid #ccc;padding:4px 8px;text-align:left;vertical-align:top}
     if s.tipo is Tipo.CRIACAO:
         p.append(f"<tr><th>Usuário de referência</th><td>{escape(s.usuario_referencia or '')}"
                  f"{' (ZBR ' + escape(res.zbr) + ')' if res.zbr else ''}</td></tr>")
-    p.append(f"""<tr><th>Transações</th><td>{escape(', '.join(s.transacoes))}</td></tr>
+    p.append(f"""<tr><th>Transações</th><td>{escape(', '.join(s.transacoes)) or '(nenhuma)'}</td></tr>
 <tr><th>Justificativa</th><td>{escape(s.justificativa)}</td></tr>
 <tr><th>Solicitante</th><td>{escape(s.solicitante_nome)} &lt;{escape(s.solicitante_email)}&gt;</td></tr>
 <tr><th>Enviado em</th><td>{escape(s.enviado_em or '')}</td></tr>
@@ -92,6 +96,9 @@ td,th{{border:1px solid #ccc;padding:4px 8px;text-align:left;vertical-align:top}
         p.append(f"<h3>Não analisada</h3><p>{escape(res.motivo)}</p>")
     if res.avisos:
         p.append("<h3>Avisos</h3><ul>" + "".join(f"<li>{escape(a)}</li>" for a in res.avisos) + "</ul>")
+    if res.sem_analise:
+        p.append("<h3>Análise de risco</h3><p>Nenhuma transação foi pedida (a criação usa o perfil do usuário de referência): "
+                 "<b>não houve análise de risco</b>.</p>")
     if res.comparativo is not None:
         p.append(f"<h3>Análise de risco (GRC, simulação em {escape(res.alvo_simulacao or '')}, Rule Set EP - SOD 2019, "
                  "só riscos trazidos pela role)</h3>")
@@ -101,8 +108,7 @@ td,th{{border:1px solid #ccc;padding:4px 8px;text-align:left;vertical-align:top}
                 p.append("<p>Nenhuma single role dá acesso a esta transação.</p>")
                 continue
             rec = res.comparativo.recomendada(t)
-            p.append("<table><tr><th>Single role</th><th>Riscos</th>" + "".join(f"<th>{n}</th>" for n in NIVEIS)
-                     + "<th>Detalhe</th></tr>")
+            p.append("<table><tr><th>Single role</th><th>Críticos</th><th>Detalhe</th></tr>")
             for r in lista:
                 c = r.contagem()
                 marca = " ★ menor risco" if len(lista) > 1 and rec is not None and r is rec else ""
@@ -113,8 +119,7 @@ td,th{{border:1px solid #ccc;padding:4px 8px;text-align:left;vertical-align:top}
                                           f"({escape(x.nivel)}) {escape(x.descricao)}" for x in r.riscos)
                 else:
                     detalhe = "sem risco"
-                p.append(f"<tr><td>{escape(r.role)}{marca}</td><td>{'—' if r.erro else len(r.riscos)}</td>"
-                         + "".join(f"<td>{c[n] or ''}</td>" for n in NIVEIS) + f"<td>{detalhe}</td></tr>")
+                p.append(f"<tr><td>{escape(r.role)}{marca}</td><td>{'—' if r.erro else c['Critical']}</td><td>{detalhe}</td></tr>")
             p.append("</table>")
     req = _texto_request(res)
     if req:
@@ -123,7 +128,7 @@ td,th{{border:1px solid #ccc;padding:4px 8px;text-align:left;vertical-align:top}
         p.append("<h3>Evidências</h3>")
         for nome, uri in prints:
             if uri:
-                p.append(f"<p><b>{escape(nome)}</b><br><img src=\"{uri}\" style=\"max-width:1100px;border:1px solid #ccc\"></p>")
+                p.append(f"<p><b>{escape(nome)}</b><br><img src=\"{uri}\" style=\"width:100%;max-width:1700px;border:1px solid #ccc\"></p>")
             else:
                 p.append(f"<p><b>{escape(nome)}</b>: não embutida (limite do e-mail); está na pasta do relatório.</p>")
     p.append(f"<p style='color:#888'>Gerado em {gerado_em:%d/%m/%Y %H:%M} pela automação User-management-forms.</p>"

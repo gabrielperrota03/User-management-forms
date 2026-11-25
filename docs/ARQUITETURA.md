@@ -11,7 +11,9 @@ vigia ligada no logon do Windows.
 
 ## 1. Objetivo e regra de negócio
 
-Alguém preenche o Forms pedindo uma ou mais **transações** (ex.: `FB01`) para um **IGG**. Para cada resposta a aplicação:
+Alguém preenche o Forms pedindo a **criação** de um usuário (IGG novo + usuário de referência) ou a **modificação** de um IGG
+existente com uma ou mais **transações** (ex.: `FB01`). A criação **não pede transações**: o perfil é o ZBR da referência e o
+relatório sai como `SEM ANÁLISE` (sem simulação de risco; a request ainda passa pelas guardas e pelo dry-run). Para cada resposta a aplicação:
 
 1. **Valida** a resposta (formato do IGG, das transações, remetente da organização, IGG protegido).
 2. **Confere no E1P (somente leitura, SU01D)** se o usuário existe:
@@ -19,7 +21,10 @@ Alguém preenche o Forms pedindo uma ou mais **transações** (ex.: `FB01`) para
    - **Modificação** e o usuário **não existe** → não analisa, avisa.
 3. **Descobre as single roles** que dão cada transação: E1P › **SUIM**, relatório de roles por valor de autorização,
    objeto `S_TCODE` = transação (somente leitura). Caminho gravado pelo analista em 17/11/2026; detalhes em `suim.py`.
-4. **Análise de risco no GRC** (somente leitura): *Access Management › User Level Simulation*, uma vez para cada single
+   **Só as single roles que levam o nome da transação** (`Y-BRF-FB01-POST_DOCUMENT` e variantes como `..._BR02` para FB01; palavra
+   inteira, sem diferenciar maiúsculas) entram na análise; se nenhuma levar o nome, valem todas as candidatas (decisão do analista,
+   23/11/2026: evita análises desnecessárias). O relatório avisa quantas foram ignoradas.
+4. **Análise de risco no GRC** (somente leitura, exceto a variante abaixo): *Access Management › User Level Simulation*, uma vez para cada single
    role candidata, sempre com **Rule Set `EP - SOD 2019`** (regra do analista) e a caixa **Risk from Simulation only**
    marcada: só entram os riscos que a role traz, não os que o usuário já tem (decisão do analista, 17/11/2026; no teste com
    FB01 isso tirou o CIT01_EP, que vinha de SE16N/SM35 do próprio usuário). O resultado é lido nos dois tipos
@@ -27,6 +32,10 @@ Alguém preenche o Forms pedindo uma ou mais **transações** (ex.: `FB01`) para
    Caminho mapeado ao vivo em 17/11/2026; detalhes em `grc_risco.py`.
    O resultado é lido tela a tela (10 linhas por tela, número absoluto no atributo `rr` das linhas) até ter 1..total sem
    buraco, com um print por tela; sem conseguir ler tudo, a análise fica incompleta e nenhuma request sai.
+   O passo 1 usa a **variante salva `EP_SOD_2019_BRTEP`** (System E1PCLNT010, Rule Set EP - SOD 2019, Critical Action + Permission Level),
+   criada uma vez por `scripts/criar_variante_grc.py` (única escrita no GRC além da request, autorizada em 25/11/2026). Escolher a variante
+   troca o rótulo do assistente para *Risk Analysis :* (aceito só com a variante, conferindo o bloco *Simulation Criteria*); se a variante
+   não existir, a rotina preenche tudo à mão como antes. O resultado é o mesmo (conferido ao vivo com FB01).
 5. **Compara** as candidatas (qual tem menos riscos, qual é a mais grave) e monta o relatório.
 6. **Criação apenas:** cria no GRC a request de criação do usuário (`New or Change Account`) com o **ZBR do usuário de referência**.
 7. **Relatório HTML** com o resultado e os **prints anexados**; aviso de conflito no assunto. Um fluxo do Power Automate envia
@@ -94,7 +103,7 @@ analista, então o disparo é local:
 | 4 | Regra de existência (Criação × Modificação). Divergiu → aviso, final | `AVISO` |
 | 5 | Criação: ZBR do usuário de referência pela lista (seção 6). Sem ZBR → aviso, final | `AVISO` |
 | 6 | SUIM: single roles por transação. Transação sem single role → entra no relatório como "sem role" | — |
-| 7 | GRC: simulação para cada single role candidata (export Excel + prints) | `ANALISADA` |
+| 7 | GRC: simulação para cada single role candidata (export Excel + prints). Criação sem transações pula os passos 6 e 7 | `ANALISADA` |
 | 8 | Criação: request no GRC (seção 7) | `REQUEST_CRIADA` |
 | 9 | Relatório gravado | `CONCLUIDA` |
 
@@ -111,7 +120,8 @@ A decisão (etapas 2, 4, 5 e 8) é uma **função pura** em `decisao.py`: entrad
 
 Para cada transação, cada single role candidata recebe:
 
-- total de riscos e contagem por nível (Critical, High, Medium, Low);
+- total de riscos e contagem por nível (Critical, High, Medium, Low); o **quadro do relatório mostra só a coluna Críticos**, e o
+  detalhe lista todos os riscos (decisão do analista, 23/11/2026; a decisão de conflito continua sendo qualquer risco);
 - o nível mais grave;
 - riscos **novos** (que a simulação acrescenta em relação ao acesso atual), quando o GRC distingue.
 
@@ -181,7 +191,7 @@ Na dúvida a aplicação **não age**: vira aviso no relatório e um humano deci
 | **Origem da resposta** | Email do solicitante em domínio permitido (`seguranca.dominios_permitidos`) |
 | **IGG válido** | Letra + 7 dígitos, para o usuário e para a referência; referência ≠ usuário |
 | **IGG protegido** | `seguranca.igg_protegidos`: a aplicação nunca age sobre eles |
-| **Transações válidas** | `^[A-Z][A-Z0-9_/]{1,19}$`, no máximo `seguranca.max_transacoes` (padrão 10) |
+| **Transações válidas** | `^[A-Z][A-Z0-9_/]{1,19}$`, no máximo `seguranca.max_transacoes` (padrão 10); obrigatórias só na Modificação |
 | **Criação só para usuário novo** | Existe no E1P → sem request, aviso (conferido de novo antes do Submit) |
 | **SAP somente leitura** | SU01D, SUIM e o report do O97 só são lidos; nada é gravado no SAP |
 | **GRC** | Risk Analysis só roda o relatório (nada é salvo). A única escrita é a request de criação |
@@ -196,7 +206,7 @@ Na dúvida a aplicação **não age**: vira aviso no relatório e um humano deci
   `AAAAMMDD_HHMMSS_<assunto>.html` (prints embutidos no corpo, com teto de 16 prints e ~4 MB) e os PNG originais. **Só os prints do
   GRC** entram (resultado de cada simulação e formulário da request): SU01D e SUIM **não geram print** (decisão do analista,
   23/11/2026; `SapE1PReal(tirar_prints=True)` liga de volta para depuração).
-- Assunto: `[gestao-usuarios] <Criação|Modificação> <IGG> - <OK|CONFLITO|AVISO|RECUSADA> (<transações>)`.
+- Assunto: `[gestao-usuarios] <Criação|Modificação> <IGG> - <OK|CONFLITO|AVISO|RECUSADA|SEM ANÁLISE> (<transações ou "sem transações">)`.
 - Fluxo do Power Automate **"Gestao Usuarios - Relatorio por email"** (`docs/forms-e-fluxos.md`, seção 3): criado e **ligado** (testado em 23/11/2026);
   ao aparecer o HTML na pasta, envia o corpo por e-mail só para o analista (sem CC).
 
@@ -217,7 +227,7 @@ Na dúvida a aplicação **não age**: vira aviso no relatório e um humano deci
 | `sap_gui.py` | Sessão própria por sistema (E1P/O97), leitura de ALV e popups | pronto (não testado ao vivo) |
 | `suim.py` | SUIM: transação → roles (caminho gravado + conferências de título, programa e popup) | validado ao vivo (FB01, 17/11/2026) |
 | `sap_e1p.py` | Porta SapE1P real: SU01D (existe? bloqueado?) + SUIM, sem prints | validado ao vivo (23/11/2026) |
-| `capturas.py` | Prints do SAP (HardCopy) e do GRC, reduzidos a 1280 px | pronto |
+| `capturas.py` | Prints do SAP (HardCopy, 1280 px) e do GRC (recortados no conteúdo, até 1700 px, exibidos a 100% da largura no relatório) | pronto |
 | `conexoes.py` | Conexões reais abertas sob demanda: sessão própria do E1P, Chromium dedicado (CDP), O97; falha no GRC para a rodada uma vez só | validado ao vivo |
 | `rotina.py` | Uma rodada: respostas novas → análise → relatório → manifesto; falha de um pedido vira aviso | validado ao vivo (modificação) |
 | `sap_o97.py` | *User x Business Roles Report*: um IGG (fallback) e a extração semanal da BR-TEP | validado ao vivo (19/11/2026) |
@@ -244,9 +254,8 @@ Na dúvida a aplicação **não age**: vira aviso no relatório e um humano deci
 6. **SUIM** validada ao vivo em 17/11/2026 (FB01, E1P/010): *Roles by Complex Selection Criteria* (RSUSR070) com
    `S_TCODE` = FB01 devolve 10 single roles (ex.: `Y-BRF-FB01-POST_DOCUMENT`). A análise usa as **single roles**
    (decisão do analista, 17/11/2026); composite que aparecer é ignorada com aviso.
-7. **Roles ocultas.** O popup do F8 avisa *"523 roles with missing authorization not displayed"*: o usuário que roda não
-   enxerga todas as roles, e o resultado pode estar incompleto. Hoje vira aviso no relatório; decidir se basta ou se a rotina
-   deve rodar com outro usuário/autorização.
+7. **Roles ocultas.** O popup do F8 avisa *"523 roles with missing authorization not displayed"* (o usuário que roda não
+   enxerga todas as roles). O analista decidiu em 23/11/2026 que **não é importante**: o aviso foi retirado do relatório.
 8. **Login do Chromium dedicado.** A sessão do GRC vence e o login (Windows Hello) é do analista. Com a vigia rodando sozinha,
    um pedido que chega com a sessão vencida fica pendente e a vigia tenta de novo a cada 5 min; falta um aviso ao analista
    (email ou notificação) para ele saber que precisa entrar.

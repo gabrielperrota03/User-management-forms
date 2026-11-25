@@ -45,7 +45,8 @@ def avaliar_solicitacao(s: Solicitacao, r: RegrasSeguranca) -> list[str]:
         elif s.usuario_referencia == s.igg:
             motivos.append("usuário de referência igual ao próprio usuário")
     if not s.transacoes:
-        motivos.append("nenhuma transação informada")
+        if s.tipo is Tipo.MODIFICACAO:                  # na criação o Forms não pede transações (o perfil vem do ZBR da referência)
+            motivos.append("nenhuma transação informada")
     elif len(s.transacoes) > r.max_transacoes:
         motivos.append(f"{len(s.transacoes)} transações: o máximo por solicitação é {r.max_transacoes}")
     invalidas = [t for t in s.transacoes if not RE_TRANSACAO.match(t)]

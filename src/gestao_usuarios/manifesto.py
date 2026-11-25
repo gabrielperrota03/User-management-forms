@@ -49,7 +49,7 @@ class Manifesto:
         self.caminho = caminho
         self.entradas: dict[str, Entrada] = {}
         if caminho.exists():
-            dados = json.loads(caminho.read_text(encoding="utf-8"))
+            dados = json.loads(caminho.read_text(encoding="utf-8-sig"))   # tolera BOM (editor, PowerShell)
             self.entradas = {k: Entrada.from_json(v) for k, v in dados.items()}
 
     def salvar(self) -> None:

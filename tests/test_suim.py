@@ -130,13 +130,14 @@ def test_caminho_gravado_roles_e_aviso_de_roles_ocultas():
     assert s.comps["wnd[0]/tbar[0]/okcd"].text == "/nSUIM"
     assert s.comps[c.campo_objeto].text == "S_TCODE" and s.comps[c.campo_valor].text == "FB01"
     assert s.comps["wnd[0]/tbar[1]/btn[8]"].pressionado == 1 and s.comps["wnd[1]/tbar[0]/btn[0]"].pressionado == 1
-    assert any("523 roles" in a for a in suim_.avisos)
+    assert suim_.avisos == []                           # o aviso de roles ocultas foi retirado (decisão do analista)
 
 
 def test_singles_da_inspecao_real():
     c = cfg_suim()
     r = suim.SuimRoles(SessaoFalsa(c), c)
-    assert r.singles_por_transacao("FB01") == ("Y-BRA-DEPRECIATION_PROCESSING", "Y-BRF-FB01-POST_DOCUMENT")
+    assert r.singles_por_transacao("FB01") == ("Y-BRF-FB01-POST_DOCUMENT",)     # só a que leva o nome da transação
+    assert len(r.avisos) == 1 and "só as 1 single roles com FB01" in r.avisos[0]
 
 
 def test_composites_sao_ignoradas_com_aviso():
@@ -206,7 +207,10 @@ def test_tipo_do_icone(icone, tipo):
     assert suim.tipo_do_icone(icone) is tipo
 
 
-def test_roles_ocultas():
-    assert suim.roles_ocultas(POPUP_REAL) == 523
-    assert suim.roles_ocultas("Information | 1.204 roles with missing authorization not displayed") == 1204
-    assert suim.roles_ocultas("Number of hits: 3") is None and suim.roles_ocultas(None) is None
+def test_com_nome_da_transacao():
+    nomes = ("Y-BRA-DEPRECIATION_PROCESSING", "Y-BRF-FB01-POST_DOCUMENT", "Y-BRF-FB01-POST_DOCUMENT_BR02", "Y-BRF-XFB01Z-OUTRA")
+    assert suim.com_nome_da_transacao("FB01", nomes) == ("Y-BRF-FB01-POST_DOCUMENT", "Y-BRF-FB01-POST_DOCUMENT_BR02")
+    assert suim.com_nome_da_transacao("fb01", nomes[:2]) == (nomes[1],)
+    assert suim.com_nome_da_transacao("FF_5", ("Y-BRF-FF_5-BANK_STATEMENT", "Y-BRF-FF_50-X")) == ("Y-BRF-FF_5-BANK_STATEMENT",)
+    assert suim.com_nome_da_transacao("FB01", nomes[:1]) == nomes[:1]            # nenhuma com o nome: todas as candidatas
+    assert suim.com_nome_da_transacao("FB01", ()) == ()

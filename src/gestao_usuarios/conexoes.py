@@ -55,7 +55,7 @@ def garantir_navegador(cdp: str, chrome: str, perfil: str, espera: float = 30.0)
 
 
 def _sessao_grc_expirada(pagina) -> bool:
-    if "login." in pagina.url.split("/")[2]:
+    if "login." in (pagina.url.split("/") + ["", "", ""])[2]:
         return True
     for f in pagina.frames:
         try:
@@ -63,6 +63,22 @@ def _sessao_grc_expirada(pagina) -> bool:
         except Exception:  # noqa: BLE001
             continue
         if "Unauthorized Error" in t or "session has expired" in t.lower():
+            return True
+    return False
+
+
+def esperar_login(pagina, limite_s: float, passo_s: float = 3.0, expirada=_sessao_grc_expirada) -> bool:
+    """Login/sessão do GRC pedido: espera o analista entrar na janela do Chromium dedicado (até `limite_s`) em vez de parar a
+    rodada, que só seria retomada minutos depois. True = a sessão está boa (esperou ou não); False = estourou o tempo."""
+    if not expirada(pagina):
+        return True
+    log.warning("o GRC pediu login: entre na janela do Chromium dedicado (espero até %.0f min)", limite_s / 60)
+    gasto = 0.0
+    while gasto < limite_s:
+        pagina.wait_for_timeout(int(passo_s * 1000))
+        gasto += passo_s
+        if not expirada(pagina):
+            log.info("login do GRC feito; seguindo")
             return True
     return False
 
@@ -112,8 +128,11 @@ class ConexoesReais:
         home = next((p for p in contexto.pages if "/ui2/nwbc/" in p.url), None) or contexto.new_page()
         home.goto(g["url"], wait_until="load", timeout=60000)          # renova a sessão (SSO)
         home.wait_for_timeout(5000)
-        if _sessao_grc_expirada(home):
+        if not esperar_login(home, float(g.get("espera_login_s", 600))):
             raise SessaoParada("sessão do GRC expirada: entre na janela do Chromium dedicado e rode de novo")
+        if "/ui2/nwbc/" not in home.url:                                # saiu do login em outra página: volta ao NWBC
+            home.goto(g["url"], wait_until="load", timeout=60000)
+            home.wait_for_timeout(3000)
         return GrcRiscoPlaywright(contexto, ConfigGrcRisco.de_config(self.cfg), self._pasta)
 
     def grc_request(self) -> GrcRequestPlaywright:

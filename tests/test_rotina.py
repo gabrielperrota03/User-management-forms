@@ -212,7 +212,7 @@ def test_nome_do_html_para_o_fluxo(tmp_path):
     arq = escrever(tmp_path / "sol", "a.json")
     saida, _ = rodar(tmp_path, [arq], ConexoesFalsas())
     nome = saida.resumos[0].relatorio.name
-    assert nome[:16] == "20261123_" + nome[9:16] and nome[8] == "_" and nome[15] == "_"
+    assert nome[:8] == datetime.now().strftime("%Y%m%d") and nome[8] == "_" and nome[15] == "_"
     assert nome[16:-5] == "[gestao-usuarios] Modificação L1234567 - CONFLITO (FB01)"
 
 

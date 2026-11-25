@@ -56,7 +56,33 @@ def separar_transacoes(texto) -> tuple[str, ...]:
 
 def _texto(d: dict, chave: str) -> str:
     v = d.get(chave)
+    if isinstance(v, int) and not isinstance(v, bool):      # o Forms entrega o Response Id como número
+        return str(v)
     return v.strip() if isinstance(v, str) else ""
+
+
+# O Forms ramifica (seções 'Criação de usuário' e 'Modificação de acesso'). O fluxo do Power Automate grava a resposta crua:
+# uma chave por pergunta, com o ID que o Forms deu a ela (docs/forms-e-fluxos.md), mais 'responder', 'submitDate' e 'id_resposta'.
+# Os nomes legíveis (criacao_igg, igg...) continuam valendo (testes, reprocessamento e um fluxo que renomeie as chaves).
+ID_TIPO = "re72ac6907e2d4cab8bdfd5be73b385db"
+CHAVES = {
+    Tipo.CRIACAO: {"igg": ("r1b4568cc37574ca3977384e4e5a19dec", "criacao_igg", "igg"),
+                   "referencia": ("r886c8288e16e4395b18dd31413a8b751", "criacao_referencia", "usuario_referencia"),
+                   "justificativa": ("r4e7aee5435694475a7b383ad319db54b", "criacao_justificativa", "justificativa"),
+                   "transacoes": ("criacao_transacoes", "transacoes")},
+    Tipo.MODIFICACAO: {"igg": ("rd5822024821e4e7f8b25a2ef94ea40e0", "modificacao_igg", "igg"),
+                       "referencia": (),
+                       "justificativa": ("r4a2c00f93e374f2aa59595244af7651c", "modificacao_justificativa", "justificativa"),
+                       "transacoes": ("rf821d5f8f8604eb78ff9f1796ad0de52", "modificacao_transacoes", "transacoes")},
+}
+
+
+def _primeiro(d: dict, chaves: tuple[str, ...]) -> str:
+    for c in chaves:
+        v = _texto(d, c)
+        if v:
+            return v
+    return ""
 
 
 def de_dict(d, arquivo: str) -> Solicitacao:
@@ -65,19 +91,19 @@ def de_dict(d, arquivo: str) -> Solicitacao:
     id_resposta = _texto(d, "id_resposta")
     if not id_resposta:
         raise RespostaInvalida("sem id_resposta")
-    tipo = ler_tipo(d.get("tipo"))
-    referencia = _texto(d, "usuario_referencia").upper() or None
+    tipo = ler_tipo(d.get("tipo") if "tipo" in d else d.get(ID_TIPO))
+    k = CHAVES[tipo]
     return Solicitacao(
         arquivo=arquivo,
         id_resposta=id_resposta,
         tipo=tipo,
-        igg=_texto(d, "igg").upper(),
-        transacoes=separar_transacoes(d.get("transacoes")),
-        justificativa=_texto(d, "justificativa"),
+        igg=_primeiro(d, k["igg"]).upper(),
+        transacoes=separar_transacoes(_primeiro(d, k["transacoes"])),
+        justificativa=_primeiro(d, k["justificativa"]),
         solicitante_nome=_texto(d, "solicitante_nome"),
-        solicitante_email=_texto(d, "solicitante_email").lower(),
-        usuario_referencia=referencia if tipo is Tipo.CRIACAO else None,
-        enviado_em=_texto(d, "enviado_em") or None,
+        solicitante_email=_primeiro(d, ("solicitante_email", "responder")).lower(),
+        usuario_referencia=_primeiro(d, k["referencia"]).upper() or None,
+        enviado_em=_primeiro(d, ("enviado_em", "submitDate")) or None,
     )
 
 

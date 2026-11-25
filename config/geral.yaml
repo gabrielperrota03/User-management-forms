@@ -13,6 +13,7 @@ grc:
   perfil: 'C:/dev/browsers/perfil-sox'
   functional_area: 'EP- BRAZIL'
   user_group: 'BR-TEP'
+  espera_login_s: 600                # login (SSO) pedido: espera o analista entrar na janela, em vez de parar a rodada
 
 pastas:
   insumos: '%OneDriveCommercial%\TEPBR-FINANCE - 1 - SOX\Insumos - Automação'
@@ -52,6 +53,7 @@ grc_risco:
   sistema_simulacao: 'E1P client 010 - Unisol'
   tipo_role: 'Technical Role'
   acao: 'Include'
+  variante: 'EP_SOD_2019_BRTEP'      # variante salva no GRC (passo 1 da simulação); criada uma vez por scripts/criar_variante_grc.py
 
 # O97 › User x Business Roles Report (mapeado ao vivo em 19/11/2026). A filial é só a BR-TEP; o connector tira as roles de BW.
 o97:

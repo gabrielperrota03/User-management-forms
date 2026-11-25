@@ -9,7 +9,9 @@ SU01D, relatório por email) e `C:\dev\sox-automation` (Risk Analysis, SUIM, For
 
 1. **SAP (E1P e O97) é SOMENTE LEITURA**: SU01D, SUIM e o *User x Business Roles Report*. Nada é gravado no SAP.
 2. **GRC: a única escrita é a request de criação de usuário**, e só para usuário que **não existe** no E1P (relido antes do
-   Submit). Usuário que já existe = aviso, nunca request. Risk Analysis só roda o relatório, nunca salva.
+   Submit). Usuário que já existe = aviso, nunca request. Risk Analysis só roda o relatório, nunca salva. **Única exceção
+   (analista, 25/11/2026):** a variante `EP_SOD_2019_BRTEP` do passo 1 da simulação, salva UMA vez por `scripts/criar_variante_grc.py`;
+   a rotina só a seleciona em *Saved Variants* e nunca clica em Save (`wd.PROIBIDOS`).
 2a. **Análise de risco no GRC sempre com Rule Set `EP - SOD 2019`** (conferido na tela antes de seguir; nunca o padrão
    *Total Worldwide - Global Rule Set*) e com **Risk from Simulation only** marcada (só os riscos que a role traz).
 2b. **A filial é só a BR-TEP**: o report do O97 roda sempre com User Group `BR-TEP` e Connector `E1PCLNT010`.
