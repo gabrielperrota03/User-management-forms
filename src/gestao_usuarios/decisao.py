@@ -18,16 +18,18 @@ class Acao(StrEnum):
     ANALISAR = "analisar"
     AVISAR_LEITURA_INCERTA = "avisar_leitura_incerta"
     AVISAR_JA_EXISTE = "avisar_ja_existe"                  # criação de quem já existe no SAP: guarda de segurança
-    AVISAR_NAO_EXISTE = "avisar_nao_existe"                # modificação de quem não existe no SAP
     AVISAR_REFERENCIA_NAO_EXISTE = "avisar_referencia_nao_existe"
     AVISAR_SEM_ZBR = "avisar_sem_zbr"
     AVISAR_VARIOS_ZBR = "avisar_varios_zbr"
 
 
-def decidir_entrada(s: Solicitacao, usuario: UsuarioSap, referencia: UsuarioSap | None = None,
+def decidir_entrada(s: Solicitacao, usuario: UsuarioSap | None, referencia: UsuarioSap | None = None,
                     zbrs: tuple[str, ...] | None = None) -> tuple[Acao, str]:
-    """Depois das guardas de segurança: a solicitação segue para a análise ou vira aviso? A primeira regra que valer encerra."""
-    if usuario.existe is None:
+    """Depois das guardas de segurança: a solicitação segue para a análise ou vira aviso? A primeira regra que valer encerra.
+    Modificação não confere o usuário no E1P (analista, 25/11/2026: a análise de risco basta): `usuario` vem None."""
+    if s.tipo is Tipo.MODIFICACAO:
+        return Acao.ANALISAR, "modificação: só a análise de risco (o usuário não é conferido no E1P)"
+    if usuario is None or usuario.existe is None:
         return Acao.AVISAR_LEITURA_INCERTA, f"não foi possível confirmar se {s.igg} existe no E1P"
     if s.tipo is Tipo.CRIACAO:
         if usuario.existe:
@@ -42,9 +44,6 @@ def decidir_entrada(s: Solicitacao, usuario: UsuarioSap, referencia: UsuarioSap 
             return Acao.AVISAR_VARIOS_ZBR, (f"usuário de referência {s.usuario_referencia} tem mais de um ZBR "
                                             f"({', '.join(zbrs)}): escolher à mão")
         return Acao.ANALISAR, f"criação com ZBR {zbrs[0]} (de {s.usuario_referencia})"
-    if not usuario.existe:
-        return Acao.AVISAR_NAO_EXISTE, f"{s.igg} não existe no E1P: modificação impossível, verificar se o pedido é criação"
-    return Acao.ANALISAR, "modificação de usuário existente"
 
 
 def alvo_da_simulacao(s: Solicitacao) -> str:

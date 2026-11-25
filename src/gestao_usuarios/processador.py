@@ -54,8 +54,9 @@ def processar(s: Solicitacao, *, regras: RegrasSeguranca, sap: SapE1P, grc_risco
     if res.recusa:
         return res
 
-    res.usuario = sap.usuario(s.igg)
     referencia = zbrs = None
+    if s.tipo is Tipo.CRIACAO:                          # modificação não confere o usuário no E1P: a análise de risco basta
+        res.usuario = sap.usuario(s.igg)
     if s.tipo is Tipo.CRIACAO and res.usuario.existe is False:
         referencia = sap.usuario(s.usuario_referencia)
         if referencia.existe:
@@ -66,10 +67,6 @@ def processar(s: Solicitacao, *, regras: RegrasSeguranca, sap: SapE1P, grc_risco
         return res
     if s.tipo is Tipo.CRIACAO:
         res.zbr = zbrs[0]
-    if s.tipo is Tipo.MODIFICACAO and res.usuario.bloqueado:
-        res.avisos.append(f"{s.igg} está bloqueado no E1P")
-    elif s.tipo is Tipo.MODIFICACAO and res.usuario.bloqueado is None:
-        res.avisos.append(f"não deu para confirmar se {s.igg} está bloqueado no E1P (aba Logon Data não lida por inteiro)")
 
     res.alvo_simulacao = alvo_da_simulacao(s)
     if not s.transacoes:                                # criação: o Forms não pede transações, o perfil é o ZBR da referência

@@ -1,4 +1,4 @@
-"""E1P: porta SapE1P real = SU01D (o usuário existe? está bloqueado?) + SUIM (transação -> single roles). SOMENTE LEITURA.
+"""E1P: porta SapE1P real = SU01D (o usuário existe? está bloqueado?) + roles da transação (índice da tabela extraída, ou SUIM). SOMENTE LEITURA.
 
 SU01D portada do lock-users (calibrada ao vivo em 05/11/2026): /nSU01D, User = IGG, Display (F7). Título 'Display Users' =
 existe; senão a barra de status diz que não existe. Aba Logon Data: a linha 'User is locked' indica bloqueio; se as seções
@@ -43,20 +43,22 @@ def interpretar_logon(textos: list[str]) -> UsuarioSap:
 class SapE1PReal:
     """Porta SapE1P. `prints` e `avisos` acumulam o que vai para o relatório (a rodada esvazia entre solicitações)."""
 
-    def __init__(self, sessao, c_suim: ConfigSuim, pasta_prints: Path | None = None, tirar_prints: bool = False):
+    def __init__(self, sessao, c_suim: ConfigSuim | None = None, pasta_prints: Path | None = None, tirar_prints: bool = False,
+                 roles=None):
+        """`roles` = de onde vêm as single roles de uma transação (IndiceRoles, da tabela extraída). Sem ele, a SUIM ao vivo."""
         self.sessao = sessao
-        self.suim = SuimRoles(sessao, c_suim)
+        self.roles = roles if roles is not None else SuimRoles(sessao, c_suim)
         self.pasta_prints = pasta_prints
         self.tirar_prints = tirar_prints        # SU01D/SUIM sem print: decisão do analista, 23/11/2026 (só o GRC é evidência)
         self.prints: list[Path] = []
 
     @property
     def avisos(self) -> list[str]:
-        return self.suim.avisos
+        return self.roles.avisos
 
     def limpar(self, pasta_prints: Path | None) -> None:
         self.pasta_prints, self.prints = pasta_prints, []
-        self.suim.avisos.clear()
+        self.roles.avisos.clear()
 
     def _print(self, nome: str) -> None:
         if self.tirar_prints and self.pasta_prints is not None:
@@ -86,6 +88,7 @@ class SapE1PReal:
         return usuario
 
     def singles_por_transacao(self, transacao: str) -> tuple[str, ...]:
-        roles = self.suim.singles_por_transacao(transacao)
-        self._print(f"suim_{transacao}.png")
+        roles = self.roles.singles_por_transacao(transacao)
+        if isinstance(self.roles, SuimRoles):
+            self._print(f"suim_{transacao}.png")
         return roles

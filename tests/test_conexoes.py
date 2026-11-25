@@ -65,3 +65,11 @@ def test_esperar_login_desiste_no_limite():
     p = _PaginaFalsa(entra_em=10**6)
     assert esperar_login(p, limite_s=9, passo_s=3, expirada=lambda pg: True) is False
     assert p.esperas == 3
+
+
+def test_indice_de_roles_ausente_para_a_rodada_e_fonte_suim_o_dispensa(tmp_path):
+    from gestao_usuarios.conexoes import ConexoesReais
+    from gestao_usuarios.erros import SessaoParada
+    with pytest.raises(SessaoParada, match="gerar_indice_roles"):
+        ConexoesReais({"roles": {"fonte": "indice", "indice": str(tmp_path / "nao_existe.json")}})._indice_roles()
+    assert ConexoesReais({"roles": {"fonte": "suim"}})._indice_roles() is None

@@ -33,6 +33,10 @@ class ConexoesFalsas:
         self.abertas.add("sap")
         return self._sap
 
+    def roles(self):                                    # índice da tabela extraída: não abre o SAP
+        self.abertas.add("roles")
+        return self._sap
+
     def grc_risco(self):
         self.abertas.add("grc")
         if self.parar_em == "grc":
@@ -128,6 +132,21 @@ def test_criacao_executar_passa_pela_rodada_e_grava_o_numero(tmp_path):
     assert request.criadas == [("L1234567", "ZBRCOORD", "Criação de usuário L1234567 (ZBR ZBRCOORD) - Forms 42")]
     assert saida.resumos[0].situacao == "OK" and man.entradas["42"].request == "700001" and man.entradas["42"].fase is Fase.CONCLUIDA
     assert "700001" in saida.resumos[0].relatorio.read_text(encoding="utf-8")
+
+
+def test_modificacao_nao_abre_o_sap_nem_le_a_su01d(tmp_path):
+    """Modificação: só a análise de risco (analista, 25/11/2026). Roles vêm do índice, usuário não é conferido no E1P."""
+    arq = escrever(tmp_path / "sol", "a.json")
+    con = ConexoesFalsas()
+    saida, _ = rodar(tmp_path, [arq], con)
+    assert saida.resumos[0].situacao == "CONFLITO"
+    assert "sap" not in con.abertas and con._sap.lidos == [] and {"roles", "grc"} <= con.abertas
+
+
+def test_criacao_continua_lendo_a_su01d(tmp_path):
+    """A guarda "só usuário novo" depende da SU01D: a criação abre o SAP e lê o IGG e a referência."""
+    _, _, con = _criacao(tmp_path, False, GrcRequestFalso(), igg="L1234567")
+    assert "sap" in con.abertas and "L1234567" in con._sap.lidos and "L7654321" in con._sap.lidos
 
 
 def test_criacao_dry_run_ensaia_sem_submeter_e_volta_na_proxima(tmp_path):

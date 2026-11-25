@@ -27,7 +27,8 @@ log = logging.getLogger(__name__)
 class Conexoes(Protocol):
     """Portas reais (ou simuladas nos testes), abertas na primeira vez que são pedidas."""
 
-    def sap(self): ...
+    def sap(self): ...                                       # SU01D (só a criação usa)
+    def roles(self): ...                                     # single roles por transação (índice; não abre o SAP)
     def grc_risco(self): ...
     def grc_request(self): ...
     def fonte_zbr(self): ...
@@ -85,7 +86,7 @@ class _PortasPreguicosas:
         return self.c.sap().usuario(igg)
 
     def singles_por_transacao(self, t):
-        return self.c.sap().singles_por_transacao(t)
+        return self.c.roles().singles_por_transacao(t)
 
     def simular(self, usuario, role):
         return self.c.grc_risco().simular(usuario, role)

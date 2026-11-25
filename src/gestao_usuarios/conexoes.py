@@ -1,6 +1,6 @@
 """Conexões reais da rodada, abertas na primeira vez que são pedidas e fechadas no fim.
 
-- E1P: uma sessão PRÓPRIA (sap_gui.SessaoPropria), SU01D + SUIM (sap_e1p.SapE1PReal).
+- E1P: uma sessão PRÓPRIA (sap_gui.SessaoPropria), SU01D + roles da transação pelo índice da tabela extraída (roles.py), ou SUIM (sap_e1p.SapE1PReal).
 - GRC: Chromium dedicado por CDP (aberto se estiver fechado, padrão do lock-users); a aba do NWBC é recarregada uma vez
   para renovar a sessão (o SSO reautentica sozinho). Login pedido ou sessão vencida = SessaoParada (o analista entra).
 - O97: FonteZbrO97 abre e fecha a própria sessão a cada consulta.
@@ -19,6 +19,7 @@ from . import sap_gui
 from .erros import SessaoParada
 from .grc_request import ConfigGrcRequest, GrcRequestPlaywright
 from .grc_risco import ConfigGrcRisco, GrcRiscoPlaywright
+from .roles import IndiceRoles
 from .sap_e1p import SapE1PReal
 from .sap_o97 import ConfigO97, FonteZbrO97
 from .suim import ConfigSuim
@@ -88,6 +89,7 @@ class ConexoesReais:
         self.cfg = cfg
         self._sessao_sap = None
         self._sap = None
+        self._indice: IndiceRoles | None = None
         self._pw = None
         self._grc = None
         self._o97 = None
@@ -96,11 +98,28 @@ class ConexoesReais:
         self._pasta: Path | None = None
 
     # --- portas --------------------------------------------------------------------------------------------------
+    def roles(self):
+        """Fonte das single roles: o índice da tabela extraída (não abre o SAP) ou, com roles.fonte 'suim', a SUIM no E1P."""
+        if self._indice is None:
+            self._indice = self._indice_roles()
+        return self._indice if self._indice is not None else self.sap()
+
+    def _indice_roles(self) -> IndiceRoles | None:
+        """roles.fonte = 'indice' (padrão): single roles da tabela extraída, sem a SUIM; 'suim': consulta ao vivo."""
+        r = self.cfg.get("roles") or {}
+        if r.get("fonte", "indice") != "indice":
+            return None
+        caminho = Path(r["indice"])
+        indice = IndiceRoles.carregar(caminho)
+        if indice is None:
+            raise SessaoParada(f"índice de roles não encontrado em {caminho}: rodar scripts/gerar_indice_roles.py")
+        return indice
+
     def sap(self) -> SapE1PReal:
         if self._sap is None:
             self._sessao_sap = sap_gui.SessaoPropria("E1P", self.cfg["sap"]["conexao_e1p"])
             sessao = self._sessao_sap.__enter__()
-            self._sap = SapE1PReal(sessao, ConfigSuim.de_config(self.cfg), self._pasta)
+            self._sap = SapE1PReal(sessao, ConfigSuim.de_config(self.cfg), self._pasta, roles=self._indice or self._indice_roles())
         return self._sap
 
     def grc_risco(self) -> GrcRiscoPlaywright:
@@ -148,6 +167,8 @@ class ConexoesReais:
     # --- evidências ----------------------------------------------------------------------------------------------
     def preparar(self, pasta_prints: Path) -> None:
         self._pasta = pasta_prints
+        if self._indice is not None:
+            self._indice.avisos.clear()
         if self._sap is not None:
             self._sap.limpar(pasta_prints)
         if self._grc is not None:
@@ -158,7 +179,7 @@ class ConexoesReais:
     def evidencias(self) -> tuple[list[Path], list[str]]:
         prints = ((self._sap.prints if self._sap else []) + (self._grc.prints if self._grc else [])
                   + (self._request.prints if self._request else []))
-        avisos = list(self._sap.avisos) if self._sap else []
+        avisos = (list(self._indice.avisos) if self._indice else []) + (list(self._sap.avisos) if self._sap else [])
         return prints, avisos
 
     def fechar(self) -> None:

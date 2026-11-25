@@ -14,9 +14,9 @@ CRIACAO = dict(tipo="criacao", usuario_referencia="L7654321")
 
 def test_modificacao():
     s = solicitacao()
-    assert decidir_entrada(s, EXISTE)[0] is Acao.ANALISAR
-    assert decidir_entrada(s, NAO_EXISTE)[0] is Acao.AVISAR_NAO_EXISTE
-    assert decidir_entrada(s, INCERTO)[0] is Acao.AVISAR_LEITURA_INCERTA
+    """Modificação não confere o usuário no E1P (analista, 25/11/2026): segue direto para a análise, qualquer que seja a leitura."""
+    for usuario in (None, EXISTE, NAO_EXISTE, INCERTO):
+        assert decidir_entrada(s, usuario)[0] is Acao.ANALISAR
     assert alvo_da_simulacao(s) == "L1234567"
 
 

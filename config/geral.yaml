@@ -25,6 +25,12 @@ pastas:
 vigia:
   intervalo_s: 30
 
+# Single roles de cada transação: índice gerado UMA vez da extração `ALL single roles X Transactions.XLSX` (scripts/gerar_indice_roles.py);
+# a tabela quase não muda (analista, 25/11/2026). fonte: 'suim' volta à consulta ao vivo.
+roles:
+  fonte: 'indice'
+  indice: '%OneDriveCommercial%\TEPBR-FINANCE - 1 - SOX\Insumos - Automação\Gestao Usuarios\roles_por_transacao.json'
+
 zbr:
   prefixo: 'ZBR'
   idade_max_dias: 8                  # lista semanal + folga; mais velha que isso = consulta o O97 para o IGG

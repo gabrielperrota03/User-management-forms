@@ -16,10 +16,14 @@ existente com uma ou mais **transações** (ex.: `FB01`). A criação **não ped
 relatório sai como `SEM ANÁLISE` (sem simulação de risco; a request ainda passa pelas guardas e pelo dry-run). Para cada resposta a aplicação:
 
 1. **Valida** a resposta (formato do IGG, das transações, remetente da organização, IGG protegido).
-2. **Confere no E1P (somente leitura, SU01D)** se o usuário existe:
-   - **Criação** e o usuário **já existe** no SAP → **não cria nada**, avisa no relatório (guarda de segurança).
-   - **Modificação** e o usuário **não existe** → não analisa, avisa.
-3. **Descobre as single roles** que dão cada transação: E1P › **SUIM**, relatório de roles por valor de autorização,
+2. **Criação: confere no E1P (somente leitura, SU01D)** se o usuário existe: se **já existe** → **não cria nada**, avisa no relatório
+   (guarda de segurança). **Modificação não confere nada no E1P** (analista, 25/11/2026: a análise de risco basta): sem SU01D, sem aviso
+   de bloqueio e **sem abrir o SAP**; IGG inexistente aparece como falha da simulação no GRC.
+3. **Descobre as single roles** que dão cada transação pelo **índice `roles_por_transacao.json`** (`roles.py`), gerado UMA vez da
+   extração `ALL single roles X Transactions.XLSX` (tabela AGR_1251, objeto S_TCODE; `scripts/gerar_indice_roles.py`). A tabela quase não
+   muda (analista, 25/11/2026): sem atualização automática nem alerta de idade. Linhas apagadas saem; `*` vale como prefixo; transação
+   fora da tabela = aviso, nunca "sem risco". `roles.fonte: suim` volta à consulta ao vivo no E1P:
+   E1P › **SUIM**, relatório de roles por valor de autorização,
    objeto `S_TCODE` = transação (somente leitura). Caminho gravado pelo analista em 17/11/2026; detalhes em `suim.py`.
    **Só as single roles que levam o nome da transação** (`Y-BRF-FB01-POST_DOCUMENT` e variantes como `..._BR02` para FB01; palavra
    inteira, sem diferenciar maiúsculas) entram na análise; se nenhuma levar o nome, valem todas as candidatas (decisão do analista,
@@ -99,8 +103,8 @@ analista, então o disparo é local:
 |---|---|---|
 | 1 | Lê o JSON, registra no manifesto | `NOVA` |
 | 2 | Guardas de segurança (seção 8). Falhou → `RECUSADA` (final) | `RECUSADA` |
-| 3 | SU01D no E1P: existe? bloqueado? | — |
-| 4 | Regra de existência (Criação × Modificação). Divergiu → aviso, final | `AVISO` |
+| 3 | Criação: SU01D no E1P (existe?). Modificação: não confere | — |
+| 4 | Criação: se o usuário já existe → aviso, final | `AVISO` |
 | 5 | Criação: ZBR do usuário de referência pela lista (seção 6). Sem ZBR → aviso, final | `AVISO` |
 | 6 | SUIM: single roles por transação. Transação sem single role → entra no relatório como "sem role" | — |
 | 7 | GRC: simulação para cada single role candidata (export Excel + prints). Criação sem transações pula os passos 6 e 7 | `ANALISADA` |
@@ -226,7 +230,8 @@ Na dúvida a aplicação **não age**: vira aviso no relatório e um humano deci
 | `portas.py` | Interfaces `SapE1P`, `GrcRisco`, `GrcRequest`, `FonteZbr` | pronto |
 | `sap_gui.py` | Sessão própria por sistema (E1P/O97), leitura de ALV e popups | pronto (não testado ao vivo) |
 | `suim.py` | SUIM: transação → roles (caminho gravado + conferências de título, programa e popup) | validado ao vivo (FB01, 17/11/2026) |
-| `sap_e1p.py` | Porta SapE1P real: SU01D (existe? bloqueado?) + SUIM, sem prints | validado ao vivo (23/11/2026) |
+| `sap_e1p.py` | Porta SapE1P real: SU01D (só na criação) + SUIM opcional, sem prints | validado ao vivo (23/11/2026) |
+| `roles.py` | Índice transação → single roles (leitor de XLSX só com a biblioteca padrão; JSON em `Gestao Usuarios`) | validado ao vivo (FB01, 25/11/2026) |
 | `capturas.py` | Prints do SAP (HardCopy, 1280 px) e do GRC (recortados no conteúdo, até 1700 px, exibidos a 100% da largura no relatório) | pronto |
 | `conexoes.py` | Conexões reais abertas sob demanda: sessão própria do E1P, Chromium dedicado (CDP), O97; falha no GRC para a rodada uma vez só | validado ao vivo |
 | `rotina.py` | Uma rodada: respostas novas → análise → relatório → manifesto; falha de um pedido vira aviso | validado ao vivo (modificação) |
