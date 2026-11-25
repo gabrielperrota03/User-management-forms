@@ -27,6 +27,10 @@ COLUNA_ATE, COLUNA_APAGADO = "H", "J"
 OBJETO = "S_TCODE"
 
 
+FILTRO_AGR_1251 = "OBJECT = 'S_TCODE' AND FIELD = 'TCD' AND AGR_NAME LIKE '{roles}'"
+CAMPOS_AGR_1251 = ["AGR_NAME", "OBJECT", "AUTH", "FIELD", "LOW", "HIGH", "DELETED"]
+
+
 class ExtracaoInvalida(ValueError):
     """A planilha não tem o formato esperado: nada é gerado."""
 
@@ -79,16 +83,35 @@ class IndiceRoles:
                 raise ExtracaoInvalida(f"coluna {col} é {cab.get(col)!r}, esperado {nome!r}: o formato da extração mudou")
         if not cab.get(COLUNA_APAGADO, "").casefold().startswith("id whether object is deleted"):
             raise ExtracaoInvalida(f"coluna {COLUNA_APAGADO} é {cab.get(COLUNA_APAGADO)!r}: o formato da extração mudou")
+        return cls._indexar((
+            (i, l.get("C", ""), l.get("A", ""), l.get("G", ""), l.get(COLUNA_ATE, ""), l.get(COLUNA_APAGADO, ""))
+            for i, l in enumerate(linhas[1:], start=2)), origem, gerado_em)
+
+    @classmethod
+    def da_tabela(cls, linhas: list[dict[str, str]], origem: str, gerado_em: datetime) -> tuple["IndiceRoles", list[str]]:
+        """Linhas da AGR_1251 lida por RFC (colunas por nome: AGR_NAME, OBJECT, FIELD, LOW, HIGH, DELETED)."""
+        if not linhas:
+            raise ExtracaoInvalida("tabela vazia")
+        for col in ("AGR_NAME", "OBJECT", "FIELD", "LOW", "HIGH", "DELETED"):
+            if col not in linhas[0]:
+                raise ExtracaoInvalida(f"a tabela não trouxe a coluna {col}")
+        return cls._indexar((
+            (i, l["OBJECT"], l["AGR_NAME"], l["LOW"], l["HIGH"], l["DELETED"])
+            for i, l in enumerate(linhas, start=1) if l["FIELD"].upper() == "TCD"), origem, gerado_em)
+
+    @classmethod
+    def _indexar(cls, registros, origem: str, gerado_em: datetime) -> tuple["IndiceRoles", list[str]]:
+        """registros = (nº, objeto, role, valor, até, apagado). Só S_TCODE; apagadas saem; faixa 'até' fica nas ressalvas."""
         mapa: dict[str, set[str]] = {}
         ressalvas: list[str] = []
-        for i, l in enumerate(linhas[1:], start=2):
-            if l.get("C", "").upper() != OBJETO or l.get(COLUNA_APAGADO, "").upper() == "X":
+        for i, objeto, role, valor, ate, apagado in registros:
+            if objeto.upper() != OBJETO or apagado.upper() == "X":
                 continue
-            role, valor = l.get("A", "").upper(), l.get("G", "").upper()
+            role, valor = role.upper(), valor.upper()
             if not role or not valor:
                 continue
-            if l.get(COLUNA_ATE):
-                ressalvas.append(f"linha {i}: {role} tem faixa ({valor!r}..{l.get(COLUNA_ATE)!r}); não expandida")
+            if ate:
+                ressalvas.append(f"linha {i}: {role} tem faixa ({valor!r}..{ate!r}); não expandida")
                 continue
             mapa.setdefault(valor, set()).add(role)
         if not mapa:
@@ -134,3 +157,14 @@ class IndiceRoles:
             self.avisos.append(f"{t}: analisadas só as {len(escolhidas)} single roles com {t} no nome; "
                                f"{len(roles) - len(escolhidas)} outras ignoradas")
         return escolhidas
+
+
+def comparar_indices(atual: IndiceRoles, novo: IndiceRoles) -> dict[str, list]:
+    """Diferenças entre dois índices (ordenadas): transações e roles que só existem de um lado, e transações cujas roles mudam."""
+    def roles(i):
+        return {r for rs in i.transacoes.values() for r in rs}
+    mudaram = sorted(t for t in atual.transacoes.keys() & novo.transacoes.keys() if atual.transacoes[t] != novo.transacoes[t])
+    return {"transacoes_so_no_atual": sorted(atual.transacoes.keys() - novo.transacoes.keys()),
+            "transacoes_so_no_novo": sorted(novo.transacoes.keys() - atual.transacoes.keys()),
+            "roles_so_no_atual": sorted(roles(atual) - roles(novo)), "roles_so_no_novo": sorted(roles(novo) - roles(atual)),
+            "transacoes_com_roles_diferentes": mudaram}

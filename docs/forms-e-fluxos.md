@@ -49,7 +49,7 @@ Ambiente **CPX - EP - SAP_Automation - PROD**.
 3. *Compose*: `@{addProperty(outputs('Get_response_details')?['body'], 'id_resposta', triggerOutputs()?['body/resourceData/responseId'])}`
    (a resposta crua mais o `id_resposta`).
 4. *Create file* (SharePoint, site TEPBR-FINANCE): pasta
-   `/1_9_SAP/1 - SOX/Insumos - Automação/Solicitacoes de Acesso/@{formatDateTime(utcNow(), 'MM_yy')}`, nome
+   `/1_9_SAP/2 - Melhorias e Projetos/7 - Automações/Gestao Usuarios/Solicitacoes de Acesso/@{formatDateTime(utcNow(), 'MM_yy')}`, nome
    `@{formatDateTime(utcNow(), 'yyyyMMdd_HHmmss')}_@{<Response Id>}.json`, conteúdo `@{outputs('Compose')}`.
    A pasta do mês é criada pelo próprio *Create file*; data e hora são em **UTC** (só dão nome ao arquivo).
 
@@ -65,7 +65,7 @@ Ambiente **CPX - EP - SAP_Automation - PROD**. Criado com *Save As* do fluxo *SO
 (que não foi alterado) e adaptado no editor. Quatro ações, como no original:
 
 1. *When a file is created (properties only)* (SharePoint, site TEPBR-FINANCE, biblioteca *1.9 - SAP*), pasta
-   `/1_9_SAP/1 - SOX/Insumos - Automação/Relatorios Gestao Usuarios` (inclui subpastas; não cruza com a pasta `Relatorios` do
+   `/1_9_SAP/2 - Melhorias e Projetos/7 - Automações/Gestao Usuarios/Relatorios` (inclui subpastas; não cruza com a pasta `Relatorios` do
    lock-users), condição de gatilho `@endsWith(triggerOutputs()?['body/{FilenameWithExtension}'], '.html')` (ignora os `.png` e
    o `.tmp`).
 2. *Get file content* (`@triggerBody()?['{Identifier}']`, sem inferir tipo) → *Compose*

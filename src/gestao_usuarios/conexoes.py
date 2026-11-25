@@ -21,6 +21,7 @@ from .grc_request import ConfigGrcRequest, GrcRequestPlaywright
 from .grc_risco import ConfigGrcRisco, GrcRiscoPlaywright
 from .roles import IndiceRoles
 from .sap_e1p import SapE1PReal
+from .sap_e1p_rfc import SapE1PRfc
 from .sap_o97 import ConfigO97, FonteZbrO97
 from .suim import ConfigSuim
 
@@ -89,6 +90,7 @@ class ConexoesReais:
         self.cfg = cfg
         self._sessao_sap = None
         self._sap = None
+        self._sap_rfc: SapE1PRfc | None = None
         self._indice: IndiceRoles | None = None
         self._pw = None
         self._grc = None
@@ -102,7 +104,7 @@ class ConexoesReais:
         """Fonte das single roles: o índice da tabela extraída (não abre o SAP) ou, com roles.fonte 'suim', a SUIM no E1P."""
         if self._indice is None:
             self._indice = self._indice_roles()
-        return self._indice if self._indice is not None else self.sap()
+        return self._indice if self._indice is not None else self._sap_gui()
 
     def _indice_roles(self) -> IndiceRoles | None:
         """roles.fonte = 'indice' (padrão): single roles da tabela extraída, sem a SUIM; 'suim': consulta ao vivo."""
@@ -115,7 +117,16 @@ class ConexoesReais:
             raise SessaoParada(f"índice de roles não encontrado em {caminho}: rodar scripts/gerar_indice_roles.py")
         return indice
 
-    def sap(self) -> SapE1PReal:
+    def sap(self):
+        """Leitura do usuário (só a criação usa): RFC (`sap.modo_usuario: rfc`, sem tela nem SAP GUI) ou SU01D por SAP GUI."""
+        if (self.cfg.get("sap") or {}).get("modo_usuario", "gui") == "rfc":
+            if self._sap_rfc is None:
+                r = self.cfg.get("rfc") or {}
+                self._sap_rfc = SapE1PRfc(r.get("sistema", "E1P"), str(r.get("mandante", "010")))
+            return self._sap_rfc
+        return self._sap_gui()
+
+    def _sap_gui(self) -> SapE1PReal:
         if self._sap is None:
             self._sessao_sap = sap_gui.SessaoPropria("E1P", self.cfg["sap"]["conexao_e1p"])
             sessao = self._sessao_sap.__enter__()
@@ -169,6 +180,8 @@ class ConexoesReais:
         self._pasta = pasta_prints
         if self._indice is not None:
             self._indice.avisos.clear()
+        if self._sap_rfc is not None:
+            self._sap_rfc.limpar(pasta_prints)
         if self._sap is not None:
             self._sap.limpar(pasta_prints)
         if self._grc is not None:
@@ -179,10 +192,13 @@ class ConexoesReais:
     def evidencias(self) -> tuple[list[Path], list[str]]:
         prints = ((self._sap.prints if self._sap else []) + (self._grc.prints if self._grc else [])
                   + (self._request.prints if self._request else []))
-        avisos = (list(self._indice.avisos) if self._indice else []) + (list(self._sap.avisos) if self._sap else [])
+        avisos = ((list(self._indice.avisos) if self._indice else []) + (list(self._sap_rfc.avisos) if self._sap_rfc else [])
+                  + (list(self._sap.avisos) if self._sap else []))
         return prints, avisos
 
     def fechar(self) -> None:
+        if self._sap_rfc is not None:
+            self._sap_rfc.fechar()
         if self._sessao_sap is not None:
             self._sessao_sap.__exit__(None, None, None)
         if self._pw is not None:

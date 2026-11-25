@@ -5,7 +5,7 @@ from xml.sax.saxutils import escape
 
 import pytest
 
-from gestao_usuarios.roles import ExtracaoInvalida, IndiceRoles, ler_xlsx
+from gestao_usuarios.roles import ExtracaoInvalida, IndiceRoles, comparar_indices, ler_xlsx
 from gestao_usuarios.sap_e1p import SapE1PReal
 
 CAB = {"A": "Role", "B": "ID", "C": "Authorization object", "D": "Auth", "F": "Field name", "G": "Authorization value",
@@ -120,3 +120,41 @@ def test_sap_e1p_usa_o_indice_sem_tocar_na_sessao(tmp_path):
     assert sap.avisos and sap.prints == []
     sap.limpar(tmp_path)
     assert sap.avisos == []
+
+
+def _agr(role, valor, apagado="", ate="", objeto="S_TCODE", campo="TCD"):
+    return {"AGR_NAME": role, "OBJECT": objeto, "AUTH": "T-1", "FIELD": campo, "LOW": valor, "HIGH": ate, "DELETED": apagado}
+
+
+def test_indice_da_tabela_agr_1251_por_rfc():
+    linhas = [_agr("Y-BRF-FB01-POST_DOCUMENT", "FB01"), _agr("Y-BRA-DEPRECIATION_PROCESSING", "FB01"),
+              _agr("Y-BRX-APAGADA", "FB01", apagado="X"), _agr("Y-BRX-OUTRO-CAMPO", "FB01", campo="ACTVT"),
+              _agr("Y-BRY-MENU", "YBIR*"), _agr("Y-BRZ-FAIXA", "ZA01", ate="ZA09")]
+    i, ressalvas = IndiceRoles.da_tabela(linhas, "AGR_1251 por RFC", AGORA)
+    assert i.transacoes["FB01"] == ("Y-BRA-DEPRECIATION_PROCESSING", "Y-BRF-FB01-POST_DOCUMENT")
+    assert i.singles_por_transacao("YBIR_X") == ("Y-BRY-MENU",) and "ZA01" not in i.transacoes
+    assert len(ressalvas) == 1 and "Y-BRZ-FAIXA" in ressalvas[0] and i.origem == "AGR_1251 por RFC"
+
+
+def test_tabela_sem_coluna_ou_vazia_nao_gera_nada():
+    with pytest.raises(ExtracaoInvalida, match="coluna LOW"):
+        IndiceRoles.da_tabela([{"AGR_NAME": "Y", "OBJECT": "S_TCODE", "FIELD": "TCD", "HIGH": "", "DELETED": ""}], "x", AGORA)
+    with pytest.raises(ExtracaoInvalida, match="vazia"):
+        IndiceRoles.da_tabela([], "x", AGORA)
+
+
+def test_xlsx_e_tabela_dao_o_mesmo_indice(tmp_path):
+    do_xlsx, _ = indice(tmp_path)
+    da_tabela, _ = IndiceRoles.da_tabela(
+        [_agr(l["A"], l["G"], l["J"], l["H"], l["C"]) for l in LINHAS[1:]], "AGR_1251 por RFC", AGORA)
+    assert comparar_indices(do_xlsx, da_tabela) == {k: [] for k in (
+        "transacoes_so_no_atual", "transacoes_so_no_novo", "roles_so_no_atual", "roles_so_no_novo", "transacoes_com_roles_diferentes")}
+
+
+def test_comparar_indices_aponta_as_diferencas():
+    a = IndiceRoles(AGORA, "a", {"FB01": ("R1", "R2"), "FB02": ("R1",)})
+    b = IndiceRoles(AGORA, "b", {"FB01": ("R1", "R3"), "FB03": ("R4",)})
+    d = comparar_indices(a, b)
+    assert d["transacoes_so_no_atual"] == ["FB02"] and d["transacoes_so_no_novo"] == ["FB03"]
+    assert d["roles_so_no_atual"] == ["R2"] and d["roles_so_no_novo"] == ["R3", "R4"]
+    assert d["transacoes_com_roles_diferentes"] == ["FB01"]

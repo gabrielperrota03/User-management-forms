@@ -5,6 +5,11 @@ sap:
   conexao_e1p: '08 - UNISOL V2 - ECC - PRD - E1P'   # entrada do SAP Logon (a mesma do lock-users)
   conexao_o97: '001 - O97 : GRC : Production'
   sistema_grc: 'E1PCLNT010'
+  modo_usuario: 'rfc'                # leitura do usuário (SU01D da criação): 'rfc' (BAPI_USER_GET_DETAIL, sem tela) ou 'gui' (SAP GUI Scripting)
+
+rfc:                                 # SAP NW RFC (sapnwrfc.dll do SAP GUI), SNC com o usuário do Windows; só leitura (rfc_sap.py)
+  sistema: 'E1P'
+  mandante: '010'
 
 grc:
   url: 'https://sapo97.main.glb.corp.local:8401/ui2/nwbc/?sap-client=960&sap-language=EN&sap-nwbc-node=root&sap-theme=sap_corbu'
@@ -16,11 +21,11 @@ grc:
   espera_login_s: 600                # login (SSO) pedido: espera o analista entrar na janela, em vez de parar a rodada
 
 pastas:
-  insumos: '%OneDriveCommercial%\TEPBR-FINANCE - 1 - SOX\Insumos - Automação'
-  solicitacoes: '%OneDriveCommercial%\TEPBR-FINANCE - 1 - SOX\Insumos - Automação\Solicitacoes de Acesso'
-  estado: '%OneDriveCommercial%\TEPBR-FINANCE - 1 - SOX\Insumos - Automação\Gestao Usuarios\estado.json'
-  lista_zbr: '%OneDriveCommercial%\TEPBR-FINANCE - 1 - SOX\Insumos - Automação\Gestao Usuarios\zbr_usuarios.json'
-  relatorios: '%OneDriveCommercial%\TEPBR-FINANCE - 1 - SOX\Insumos - Automação\Relatorios Gestao Usuarios'
+  insumos: '%OneDriveCommercial%\TEPBR-FINANCE - 2 - Melhorias e Projetos\7 - Automações'
+  solicitacoes: '%OneDriveCommercial%\TEPBR-FINANCE - 2 - Melhorias e Projetos\7 - Automações\Gestao Usuarios\Solicitacoes de Acesso'
+  estado: '%OneDriveCommercial%\TEPBR-FINANCE - 2 - Melhorias e Projetos\7 - Automações\Gestao Usuarios\estado.json'
+  lista_zbr: '%OneDriveCommercial%\TEPBR-FINANCE - 2 - Melhorias e Projetos\7 - Automações\Gestao Usuarios\zbr_usuarios.json'
+  relatorios: '%OneDriveCommercial%\TEPBR-FINANCE - 2 - Melhorias e Projetos\7 - Automações\Gestao Usuarios\Relatorios'
 
 vigia:
   intervalo_s: 30
@@ -29,7 +34,7 @@ vigia:
 # a tabela quase não muda (analista, 25/11/2026). fonte: 'suim' volta à consulta ao vivo.
 roles:
   fonte: 'indice'
-  indice: '%OneDriveCommercial%\TEPBR-FINANCE - 1 - SOX\Insumos - Automação\Gestao Usuarios\roles_por_transacao.json'
+  indice: '%OneDriveCommercial%\TEPBR-FINANCE - 2 - Melhorias e Projetos\7 - Automações\Gestao Usuarios\roles_por_transacao.json'
 
 zbr:
   prefixo: 'ZBR'

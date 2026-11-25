@@ -16,7 +16,7 @@ existente com uma ou mais **transações** (ex.: `FB01`). A criação **não ped
 relatório sai como `SEM ANÁLISE` (sem simulação de risco; a request ainda passa pelas guardas e pelo dry-run). Para cada resposta a aplicação:
 
 1. **Valida** a resposta (formato do IGG, das transações, remetente da organização, IGG protegido).
-2. **Criação: confere no E1P (somente leitura, SU01D)** se o usuário existe: se **já existe** → **não cria nada**, avisa no relatório
+2. **Criação: confere no E1P (somente leitura, `BAPI_USER_GET_DETAIL` por RFC; SU01D por SAP GUI só com `sap.modo_usuario: gui`)** se o usuário existe: se **já existe** → **não cria nada**, avisa no relatório
    (guarda de segurança). **Modificação não confere nada no E1P** (analista, 25/11/2026: a análise de risco basta): sem SU01D, sem aviso
    de bloqueio e **sem abrir o SAP**; IGG inexistente aparece como falha da simulação no GRC.
 3. **Descobre as single roles** que dão cada transação pelo **índice `roles_por_transacao.json`** (`roles.py`), gerado UMA vez da
@@ -58,9 +58,9 @@ O ZBR **não é legível no E1P**: só no **O97** (GRC, `001 - O97 : GRC : Produ
 ```mermaid
 flowchart LR
     A[Microsoft Forms] --> B[Power Automate<br/>Get response details]
-    B --> C[(SharePoint / OneDrive<br/>Insumos - Automação/<br/>Solicitacoes de Acesso/MM_AA)]
+    B --> C[(SharePoint / OneDrive<br/>7 - Automações/Gestao Usuarios/<br/>Solicitacoes de Acesso/MM_AA)]
     C --> D[Vigia da pasta<br/>Python, inicia no logon]
-    D -->|SU01D, SUIM<br/>somente leitura| E[SAP GUI E1P]
+    D -->|BAPI_USER_GET_DETAIL<br/>RFC somente leitura| E[SAP E1P]
     D -->|Risk Analysis<br/>simulação| F[GRC NWBC<br/>Chromium dedicado]
     D -->|só criação| F
     G[Tarefa semanal] -->|User x Business Roles| H[SAP GUI O97]
@@ -103,7 +103,7 @@ analista, então o disparo é local:
 |---|---|---|
 | 1 | Lê o JSON, registra no manifesto | `NOVA` |
 | 2 | Guardas de segurança (seção 8). Falhou → `RECUSADA` (final) | `RECUSADA` |
-| 3 | Criação: SU01D no E1P (existe?). Modificação: não confere | — |
+| 3 | Criação: `BAPI_USER_GET_DETAIL` no E1P por RFC (existe?). Modificação: não confere | — |
 | 4 | Criação: se o usuário já existe → aviso, final | `AVISO` |
 | 5 | Criação: ZBR do usuário de referência pela lista (seção 6). Sem ZBR → aviso, final | `AVISO` |
 | 6 | SUIM: single roles por transação. Transação sem single role → entra no relatório como "sem role" | — |
@@ -144,7 +144,7 @@ em qualquer candidata; o assunto do email ganha `CONFLITO`. A aplicação **reco
   19/11/2026), registrada por `scripts/agendar_zbr.ps1` e lançada por `scripts/rodar_zbr.cmd` (log em `logs/tarefa_zbr.log`;
   só com o usuário logado e a tela desbloqueada; PC desligado no horário = roda assim que der). Ela executa
   `scripts/atualizar_zbr.py`: o report para todos da BR-TEP (229 usuários, 1 ZBR cada, ~9 s) →
-  `Insumos - Automação/Gestao Usuarios/zbr_usuarios.json` (`{"gerado_em": ..., "usuarios": {"L1234567": ["ZBRCOORD"]}}`).
+  `7 - Automações/Gestao Usuarios/zbr_usuarios.json` (`{"gerado_em": ..., "usuarios": {"L1234567": ["ZBRCOORD"]}}`).
   Só ZBR vigente hoje (Valid From ≤ hoje ≤ Valid To). A lista nova só substitui a atual se não encolheu mais de 20%
   (extração vazia ou filtrada por engano não apaga a lista boa).
 - Na criação, o ZBR vem dessa lista pelo IGG do usuário de referência.
@@ -186,6 +186,19 @@ preenche, ex.: `J0025020(3)`): a request entra num workflow de aprovação e o u
 
 ---
 
+### RFC (25/11/2026)
+
+Roteiro e prova de conceito no vault (`10 Projetos/Automações fora do PC`). Aqui o RFC faz duas coisas, as duas só leitura:
+
+- **Leitura do usuário da criação** (`sap.modo_usuario: rfc`, padrão): sem tela, sem SAP GUI, funciona com a tela bloqueada (o Kerberos
+  só exige a sessão do Windows logada). Paridade ao vivo com a SU01D: usuário existente e inexistente deram o mesmo resultado. O
+  primeiro `BAPI_USER_GET_DETAIL` de cada conexão leva ~25 s (carga da descrição da função); as seguintes, ~0,3 s. A conexão é aberta
+  uma vez por rodada e só quando há criação. `modo_usuario: gui` volta à SU01D por SAP GUI.
+- **Índice de roles** (`scripts/gerar_indice_roles.py --rfc`): lê a `AGR_1251` (`OBJECT = 'S_TCODE' AND FIELD = 'TCD' AND AGR_NAME LIKE
+  'Y-BR%'`, só o Brasil) e compara com o índice atual. Conferido: 3.790 linhas, 1.079 roles e 2.355 transações, **idêntico** à extração
+  da planilha. `Y-%` traria os 30 mil roles de todos os países: não usar.
+- **Fica por GUI/navegador:** o report de ZBR do O97 (lista semanal e fallback) e o GRC; o usuário do analista não tem `S_RFC` no O97.
+
 ## 8. Segurança
 
 Na dúvida a aplicação **não age**: vira aviso no relatório e um humano decide.
@@ -197,16 +210,16 @@ Na dúvida a aplicação **não age**: vira aviso no relatório e um humano deci
 | **IGG protegido** | `seguranca.igg_protegidos`: a aplicação nunca age sobre eles |
 | **Transações válidas** | `^[A-Z][A-Z0-9_/]{1,19}$`, no máximo `seguranca.max_transacoes` (padrão 10); obrigatórias só na Modificação |
 | **Criação só para usuário novo** | Existe no E1P → sem request, aviso (conferido de novo antes do Submit) |
-| **SAP somente leitura** | SU01D, SUIM e o report do O97 só são lidos; nada é gravado no SAP |
+| **SAP somente leitura** | O usuário (RFC `BAPI_USER_GET_DETAIL`), a `AGR_1251` e o report do O97 só são lidos; nada é gravado no SAP. O RFC tem **lista fechada** de funções e tabelas (`rfc_sap.FUNCOES_PERMITIDAS`/`TABELAS_PERMITIDAS`): `BAPI_USER_LOCK`/`CHANGE` e qualquer outra são recusadas por código |
 | **GRC** | Risk Analysis só roda o relatório (nada é salvo). A única escrita é a request de criação |
 | **Credenciais** | Nunca passam pelo código: SSO/login feito pelo analista na janela da automação |
-| **SharePoint** | Só se grava em `Insumos - Automação` |
+| **SharePoint** | Só se grava em `7 - Automações/Gestao Usuarios` (biblioteca 1.9 - SAP › 2 - Melhorias e Projetos) |
 
 ---
 
 ## 9. Relatório e email
 
-- Pasta por solicitação: `Insumos - Automação/Relatorios Gestao Usuarios/AAAA-MM/AAAAMMDD_HHMMSS_<id>/` com o HTML
+- Pasta por solicitação: `7 - Automações/Gestao Usuarios/Relatorios/AAAA-MM/AAAAMMDD_HHMMSS_<id>/` com o HTML
   `AAAAMMDD_HHMMSS_<assunto>.html` (prints embutidos no corpo, com teto de 16 prints e ~4 MB) e os PNG originais. **Só os prints do
   GRC** entram (resultado de cada simulação e formulário da request): SU01D e SUIM **não geram print** (decisão do analista,
   23/11/2026; `SapE1PReal(tirar_prints=True)` liga de volta para depuração).
@@ -230,6 +243,8 @@ Na dúvida a aplicação **não age**: vira aviso no relatório e um humano deci
 | `portas.py` | Interfaces `SapE1P`, `GrcRisco`, `GrcRequest`, `FonteZbr` | pronto |
 | `sap_gui.py` | Sessão própria por sistema (E1P/O97), leitura de ALV e popups | pronto (não testado ao vivo) |
 | `suim.py` | SUIM: transação → roles (caminho gravado + conferências de título, programa e popup) | validado ao vivo (FB01, 17/11/2026) |
+| `rfc_sap.py` | SAP NW RFC por `ctypes` (`sapnwrfc.dll` do SAP GUI, SNC com o usuário do Windows, sem senha): lista fechada de leitura, `ler_tabela` (RFC_READ_TABLE) | validado ao vivo (E1M e E1P, 25/11/2026) |
+| `sap_e1p_rfc.py` | Porta SapE1P por RFC: `usuario()` = `BAPI_USER_GET_DETAIL` (inexistente = RETURN E/01/124; outro erro = leitura incerta) | validado ao vivo: paridade com a SU01D |
 | `sap_e1p.py` | Porta SapE1P real: SU01D (só na criação) + SUIM opcional, sem prints | validado ao vivo (23/11/2026) |
 | `roles.py` | Índice transação → single roles (leitor de XLSX só com a biblioteca padrão; JSON em `Gestao Usuarios`) | validado ao vivo (FB01, 25/11/2026) |
 | `capturas.py` | Prints do SAP (HardCopy, 1280 px) e do GRC (recortados no conteúdo, até 1700 px, exibidos a 100% da largura no relatório) | pronto |

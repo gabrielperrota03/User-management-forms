@@ -7,7 +7,8 @@ SU01D, relatório por email) e `C:\dev\sox-automation` (Risk Analysis, SUIM, For
 
 ## Regras invioláveis (só o usuário muda, e só explicitamente)
 
-1. **SAP (E1P e O97) é SOMENTE LEITURA**: SU01D, SUIM e o *User x Business Roles Report*. Nada é gravado no SAP.
+1. **SAP (E1P e O97) é SOMENTE LEITURA**: SU01D, SUIM, o *User x Business Roles Report* e o RFC (`BAPI_USER_GET_DETAIL`, `RFC_READ_TABLE`
+   na `AGR_1251`). Nada é gravado no SAP. O RFC tem lista fechada (`rfc_sap.FUNCOES_PERMITIDAS`/`TABELAS_PERMITIDAS`): só o usuário muda a lista.
 2. **GRC: a única escrita é a request de criação de usuário**, e só para usuário que **não existe** no E1P (relido antes do
    Submit). Usuário que já existe = aviso, nunca request. Risk Analysis só roda o relatório, nunca salva. **Única exceção
    (analista, 25/11/2026):** a variante `EP_SOD_2019_BRTEP` do passo 1 da simulação, salva UMA vez por `scripts/criar_variante_grc.py`;
@@ -19,7 +20,8 @@ SU01D, relatório por email) e `C:\dev\sox-automation` (Risk Analysis, SUIM, For
 4. **Na dúvida não age**: leitura incerta, simulação que falhou, ZBR ambíguo = aviso para um humano. Simulação com erro nunca vale "sem risco".
 5. **Credenciais nunca passam pelo código** (SSO feito pelo analista na janela da automação). Sem senha ou token no repositório.
 6. **Nunca versionar evidência ou dado** (prints, Excel, respostas do Forms, estado, lista de ZBR).
-7. **SharePoint: só se grava em `Insumos - Automação`.**
+7. **SharePoint: só se grava em `1.9 - SAP › 2 - Melhorias e Projetos › 7 - Automações › Gestao Usuarios`** (movido de
+   `Insumos - Automação` em 25/11/2026; `Insumos - Automação`, `Bloqueio Usuarios` e `Relatorios` são do lock-users/SOX: não mexer).
 8. **Perguntar antes** de assumir tela ou regra de negócio, baixar arquivo ou instalar pacote.
 
 ## Como trabalhar
