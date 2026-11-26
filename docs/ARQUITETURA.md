@@ -14,7 +14,8 @@ vigia ligada no logon do Windows.
 Alguém preenche o Forms pedindo a **criação** de um usuário (IGG novo + usuário de referência) ou a **modificação** de um IGG
 existente com uma ou mais **transações** (ex.: `FB01`). A criação **não pede transações**: o perfil é o ZBR da referência e o
 o e-mail sai como `PARA CRIAR` (sem simulação de risco). **A criação abre o GRC** (`request.ligada: true`, religada em 26/11/2026 depois de
-um dia desligada): em dry-run só ensaia o formulário, e o Submit exige `--executar`. Com `ligada: false` o e-mail é só o aviso. Para cada resposta a aplicação:
+um dia desligada): em dry-run só ensaia o formulário, e o Submit exige `--executar`. **Desde 26/11/2026 o vigia roda em `--executar`** (tarefa
+registrada com `agendar_vigia.ps1 -Executar`, pedido do analista para o primeiro caso real) com `request.max_por_rodada: 1`. Com `ligada: false` o e-mail é só o aviso. Para cada resposta a aplicação:
 
 1. **Valida** a resposta (formato do IGG, das transações, remetente da organização, IGG protegido).
 2. **Criação: confere no E1P (somente leitura, `BAPI_USER_GET_DETAIL` por RFC; SU01D por SAP GUI só com `sap.modo_usuario: gui`)** se o usuário existe: se **já existe** → **não cria nada**, avisa no relatório
@@ -235,7 +236,7 @@ Na dúvida a aplicação **não age**: vira aviso no relatório e um humano deci
     não verificado) e **Resultado** (o que fazer: criar à mão com o ZBR X, ou o motivo do aviso). Sem transações nem análise de risco.
     Assunto: `[gestao-usuarios] Criação <IGG> - <PARA CRIAR|REQUEST CRIADA|AVISO|CONFLITO|RECUSADA> (ZBR <zbr> | ref. <referência>)`.
 - Fluxo do Power Automate **"Gestao Usuarios - Relatorio por email"** (`docs/forms-e-fluxos.md`, seção 3): criado e **ligado** (testado em 23/11/2026);
-  ao aparecer o HTML na pasta, envia o corpo por e-mail só para o analista (sem CC).
+  ao aparecer o HTML na pasta, envia o corpo por e-mail para o analista **com o Vinicius Monteiro em cópia** (desde 26/11/2026).
 
 ---
 
@@ -253,6 +254,7 @@ Na dúvida a aplicação **não age**: vira aviso no relatório e um humano deci
 | `portas.py` | Interfaces `SapE1P`, `GrcRisco`, `GrcRequest`, `FonteZbr` | pronto |
 | `sap_gui.py` | Sessão própria por sistema (E1P/O97), leitura de ALV e popups | pronto (não testado ao vivo) |
 | `suim.py` | SUIM: transação → roles (caminho gravado + conferências de título, programa e popup) | validado ao vivo (FB01, 17/11/2026) |
+| `scripts/conferir_candidato.py` | Pré-checagem de um IGG para o primeiro teste real da criação: RFC (não existe no E1P) + ensaio do formulário do GRC sem Submit (o GRC conhece a pessoa?) | validado com os dois casos negativos (25/11/2026) |
 | `rfc_sap.py` | SAP NW RFC por `ctypes` (`sapnwrfc.dll` do SAP GUI, SNC com o usuário do Windows, sem senha): lista fechada de leitura, `ler_tabela` (RFC_READ_TABLE) | validado ao vivo (E1M e E1P, 25/11/2026) |
 | `sap_e1p_rfc.py` | Porta SapE1P por RFC: `usuario()` = `BAPI_USER_GET_DETAIL` (inexistente = RETURN E/01/124; outro erro = leitura incerta) | validado ao vivo: paridade com a SU01D |
 | `sap_e1p.py` | Porta SapE1P real: SU01D (só na criação) + SUIM opcional, sem prints | validado ao vivo (23/11/2026) |

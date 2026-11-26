@@ -75,7 +75,7 @@ o97:
 
 request:
   ligada: true                       # criação: true = abre o GRC (dry-run: ensaio do formulário; --executar: Submit); false = só o e-mail de aviso (analista, 26/11/2026: voltou a ligar)
-  max_por_rodada: 3                  # disjuntor
+  max_por_rodada: 1                  # disjuntor (1 enquanto o Submit real é novo; analista, 26/11/2026)
   bloquear_com_conflito: true        # a confirmar com o analista
 
 seguranca:

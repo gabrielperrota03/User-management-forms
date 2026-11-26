@@ -86,7 +86,8 @@ Ambiente **CPX - EP - SAP_Automation - PROD**. Criado com *Save As* do fluxo *SO
    o `.tmp`).
 2. *Get file content* (`@triggerBody()?['{Identifier}']`, sem inferir tipo) → *Compose*
    `@base64ToString(body('Get_file_content')?['$content'])`.
-3. *Send an email (V2)*: **To** o analista (`gabriel.perrota@external.totalenergies.com`), **sem CC** (decisão do analista,
+3. *Send an email (V2)*: **To** o analista (`gabriel.perrota@external.totalenergies.com`), **CC `vinicius.monteiro@totalenergies.com`** (Vinicius Monteiro; em 23/11/2026 o
+CC tinha sido tirado por decisão do analista e em 26/11/2026 voltou só com ele; decisão anterior:
    23/11/2026), **Subject** `@substring(triggerOutputs()?['body/{FilenameWithExtension}'],16,sub(length(triggerOutputs()?['body/{FilenameWithExtension}']),21))`
    (o nome do arquivo sem os 16 primeiros caracteres `AAAAMMDD_HHMMSS_` e sem `.html`), **Body** a saída do *Compose*.
 
@@ -98,7 +99,8 @@ e-mail; o que passar fica só na pasta (o HTML avisa). Os PNG originais continua
 
 **Como foi editado:** o *Code view* das ações é **só leitura** nesta versão do editor (mensagem *Cannot edit in read-only
 editor*). O campo *Folder* do gatilho é um editor de texto rico (Lexical): clique, Ctrl+A e `keyboard.insert_text`. O CC se tira
-com o botão *Remove parameter 'CC' and its value* (achar pelo rótulo acessível, não por posição). O *Flow checker* mostra 0 erros
+com o botão *Remove parameter 'CC' and its value* (achar pelo rótulo acessível, não por posição) e se põe de volta em
+*Advanced parameters* ("Showing 1 of 6" › marcar CC), digitando o e-mail e escolhendo a sugestão do diretório. O *Flow checker* mostra 0 erros
 e o aviso *This flow is off*.
 
 **Teste real (23/11/2026, 11:25):** `processar` gravou um relatório de verdade na pasta vigiada (SU01, resultado OK). Em ~1 min o
