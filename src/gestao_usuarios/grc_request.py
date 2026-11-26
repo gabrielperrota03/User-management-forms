@@ -11,10 +11,13 @@ Mapeado ao vivo em 23/11/2026 (Chromium dedicado, GRC O97, sem submeter nada):
   'Enter the value of Functional Area before adding roles').
   Aba User Access › Add › Role: diálogo 'Select Roles', critérios Role / Profile Name, Role Type, Functional Area (já preenchida);
   Role Type = 'Business Role' (o ZBR é uma Business Role) e Role / Profile Name = ZBR › Search › linha › seta Add › OK.
-  A grade fica com 1 linha: Assignment = ZBR, Type 'Business Role', Valid To 31.12.9999, Assignment Approver (workflow de
+  A grade fica com a linha do ZBR: Assignment = ZBR, Type 'Business Role', Valid To 31.12.9999, Assignment Approver (workflow de
   aprovação, diferente do Lock/Update), Provisioning Action 'Assign', Status 'Not Processed'.
+  Acesso ao SISTEMA (analista, 26/11/2026: a request 681959 saiu só com o ZBR e o usuário ficou sem acesso ao E1P): Add › System
+  abre 'Select Systems' (filtro System › Go › linha › seta Add › OK). A segunda linha da grade fica: Assignment = System =
+  E1PCLNT010, Type 'System', Valid To 30.12.9999, sem approver, Provisioning Action 'Change & Unlock User' (igual à request 680271).
   Submit › mensagem 'Request submitted successfully; the request number is N' (padrão do lock-users).
-Travas: IGG e ZBR válidos; o formulário é relido e conferido contra o esperado ANTES do Submit; exatamente 1 linha na grade;
+Travas: IGG e ZBR válidos; o formulário é relido e conferido contra o esperado ANTES do Submit; exatamente 2 linhas na grade (o ZBR e o sistema E1P);
 dados do usuário preenchidos; `verificar` (SAP de novo); Submit só com submeter=True; nunca repete o Submit.
 """
 from __future__ import annotations
@@ -48,6 +51,9 @@ class ConfigGrcRequest:
     tipo: str = "New or Change Account"
     request_for: str = "Other"
     tipo_role: str = "Business Role"
+    sistema: str = "E1PCLNT010"                 # linha de acesso ao sistema (connector do E1P, mandante 010)
+    tipo_sistema: str = "System"
+    acao_sistema: str = "Change & Unlock User"
     aba: str = "Access Management"
     link: str = "Access Request"
 
@@ -88,15 +94,25 @@ def conferir_formulario(lido: dict[str, str], c: ConfigGrcRequest, igg: str, des
 
 
 def conferir_grade(linhas: list[dict[str, str]], c: ConfigGrcRequest, zbr: str) -> list[str]:
-    """A grade de acessos tem de ter UMA linha: o ZBR, como Business Role, para atribuir (Assign)."""
-    if len(linhas) != 1:
-        return [f"a grade tem {len(linhas)} linhas, esperado 1 (o ZBR): {[l.get('Assignment') for l in linhas]}"]
-    l = linhas[0]
-    esperado = {"Assignment": zbr, "Type": c.tipo_role, "Provisioning Action": "Assign"}
-    erros = [f"{k}: tela {l.get(k)!r}, esperado {v!r}" for k, v in esperado.items()
-             if (l.get(k) or "").strip().upper() != v.upper()]
-    if (l.get("Valid To") or "").strip() not in ("31.12.9999", "30.12.9999"):
-        erros.append(f"Valid To: tela {l.get('Valid To')!r}, esperado sem fim (31.12.9999)")
+    """A grade tem de ter DUAS linhas: o ZBR (Business Role, Assign) e o sistema E1P (System, Change & Unlock User).
+    Sem a linha do sistema o usuário nasce com perfil e sem acesso ao E1P (request 681959, 26/11/2026)."""
+    if len(linhas) != 2:
+        return [f"a grade tem {len(linhas)} linhas, esperado 2 (o ZBR e o sistema {c.sistema}): "
+                f"{[l.get('Assignment') for l in linhas]}"]
+    por_tipo = {(l.get("Type") or "").strip().upper(): l for l in linhas}
+    if len(por_tipo) != 2 or c.tipo_role.upper() not in por_tipo or c.tipo_sistema.upper() not in por_tipo:
+        return [f"a grade deveria ter uma linha {c.tipo_role!r} e uma {c.tipo_sistema!r}, tem: "
+                f"{[(l.get('Assignment'), l.get('Type')) for l in linhas]}"]
+    erros = []
+    for l, esperado in ((por_tipo[c.tipo_role.upper()],
+                         {"Assignment": zbr, "Type": c.tipo_role, "Provisioning Action": "Assign"}),
+                        (por_tipo[c.tipo_sistema.upper()],
+                         {"Assignment": c.sistema, "System": c.sistema, "Type": c.tipo_sistema,
+                          "Provisioning Action": c.acao_sistema})):
+        erros += [f"{k}: tela {l.get(k)!r}, esperado {v!r}" for k, v in esperado.items()
+                  if (l.get(k) or "").strip().upper() != v.upper()]
+        if (l.get("Valid To") or "").strip() not in ("31.12.9999", "30.12.9999"):
+            erros.append(f"Valid To ({l.get('Assignment')}): tela {l.get('Valid To')!r}, esperado sem fim (31.12.9999)")
     return erros
 
 
@@ -213,6 +229,35 @@ class GrcRequestPlaywright:
         wd.aguardar(pagina, frame, 2000)
         wd.clicar_botao(pagina, frame, "OK", 3000)
 
+    def _adicionar_sistema(self, pagina, frame) -> None:
+        """Add › System › 'Select Systems': filtra pelo connector, escolhe a única linha exata, seta Add, OK."""
+        sistema = self.c.sistema
+        wd.clicar_botao(pagina, frame, "Add")
+        wd._visivel(frame, '[ct="POMNI"]', "System").click()
+        fim = time.monotonic() + 20
+        campo = None
+        while time.monotonic() < fim:                          # o diálogo 'Select Systems' demora um instante
+            try:
+                campo = _rotulo(frame, "System")
+                break
+            except TelaInesperada:
+                pagina.wait_for_timeout(500)
+        if campo is None:
+            raise TelaInesperada("o diálogo 'Select Systems' não abriu")
+        wd.digitar(pagina, frame, campo, sistema)
+        wd.clicar_botao(pagina, frame, "Go", 3000)
+        achadas = frame.evaluate(
+            """(alvo) => { const r = [...document.querySelectorAll('tr[rr]')].filter(r => r.getBoundingClientRect().height > 0
+                && [...r.querySelectorAll('td')].some(td => (td.innerText || '').trim().toUpperCase() === alvo));
+                r.forEach((x, i) => x.setAttribute('data-sistema', String(i))); return r.length; }""", sistema.upper())
+        if achadas != 1:
+            raise RequestBarrada(f"o sistema {sistema} não foi achado exatamente uma vez no GRC (achadas {achadas})")
+        frame.locator('tr[data-sistema="0"] td').nth(2).click()
+        pagina.wait_for_timeout(800)
+        frame.locator('[ct="B"][title="Add"]').last.click()               # seta: passa para 'Selected'
+        wd.aguardar(pagina, frame, 2000)
+        wd.clicar_botao(pagina, frame, "OK", 3000)
+
     def _preencher(self, pagina, frame, igg: str, zbr: str, descricao: str) -> dict:
         c = self.c
         wd.escolher(pagina, frame, _rotulo(frame, "Request Type"), c.tipo)
@@ -232,6 +277,7 @@ class GrcRequestPlaywright:
         wd.escolher(pagina, frame, _rotulo(frame, "Functional Area"), c.functional_area)
         wd.escolher(pagina, frame, _rotulo(frame, "User Group Name"), c.user_group)
         self._adicionar_zbr(pagina, frame, zbr)
+        self._adicionar_sistema(pagina, frame)
         lido = {k: _valor(_rotulo(frame, k)) for k in ("Request Type", "Request For", "User", "Functional Area",
                                                         "User Group Name", "Description")}
         erros = conferir_formulario(lido, c, igg, descricao)
@@ -285,7 +331,7 @@ class GrcRequestPlaywright:
             if not submeter:
                 return None
             numero = self._submeter(pagina, frame)
-            log.info("request %s criada: usuário %s, ZBR %s", numero, igg, zbr)
+            log.info("request %s criada: usuário %s, ZBR %s, sistema %s", numero, igg, zbr, self.c.sistema)
             self._print(pagina, f"grc_request_{igg}_{numero}.png")
             return numero
         finally:

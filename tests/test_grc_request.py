@@ -13,12 +13,17 @@ FORM = {"Request Type": "New or Change Account", "Request For": "Other", "User":
 LINHA = {"Assignment": "ZBRCOORD", "System": "", "Type": "Business Role", "Valid From": "23.11.2026", "Valid To": "31.12.9999",
          "Assignment Approver": "J0025020(3)", "Description": "Coordinator SAP", "Provisioning Environment": "All",
          "Provisioning Action": "Assign", "Provisioning Status": "Not Processed"}
+SISTEMA = {"Assignment": "E1PCLNT010", "System": "E1PCLNT010", "Type": "System", "Valid From": "26.11.2026",
+           "Valid To": "30.12.9999", "Assignment Approver": "", "Description": "E1P client 010 - Unisol",
+           "Provisioning Environment": "PRE", "Provisioning Action": "Change & Unlock User",
+           "Provisioning Status": "Not Processed"}
 
 
 def test_config():
     assert (C.functional_area, C.user_group, C.tipo, C.tipo_role) == ("EP- BRAZIL", "BR-TEP", "New or Change Account",
                                                                       "Business Role")
     assert C.url.startswith("https://sapo97")
+    assert (C.sistema, C.tipo_sistema, C.acao_sistema) == ("E1PCLNT010", "System", "Change & Unlock User")
 
 
 def test_numero_da_request_e_erros():
@@ -57,16 +62,23 @@ def test_formulario_divergente(campo, valor):
 
 
 def test_grade_confere():
-    assert conferir_grade([LINHA], C, "ZBRCOORD") == []
+    assert conferir_grade([LINHA, SISTEMA], C, "ZBRCOORD") == []
+    assert conferir_grade([SISTEMA, LINHA], C, "ZBRCOORD") == [], "a ordem das linhas não importa"
 
 
 @pytest.mark.parametrize("linhas,trecho", [
     ([], "0 linhas"),
-    ([LINHA, LINHA], "2 linhas"),
-    ([{**LINHA, "Assignment": "ZBRFI"}], "Assignment"),
-    ([{**LINHA, "Type": "Single Role"}], "Type"),
-    ([{**LINHA, "Provisioning Action": "Remove"}], "Provisioning Action"),
-    ([{**LINHA, "Valid To": "31.12.2026"}], "Valid To"),
+    ([LINHA], "1 linhas"),                                  # request 681959: só o ZBR, sem acesso ao E1P
+    ([SISTEMA], "1 linhas"),
+    ([LINHA, LINHA, SISTEMA], "3 linhas"),
+    ([LINHA, LINHA], "uma linha"),
+    ([{**LINHA, "Assignment": "ZBRFI"}, SISTEMA], "Assignment"),
+    ([{**LINHA, "Type": "Single Role"}, SISTEMA], "uma linha"),
+    ([{**LINHA, "Provisioning Action": "Remove"}, SISTEMA], "Provisioning Action"),
+    ([{**LINHA, "Valid To": "31.12.2026"}, SISTEMA], "Valid To"),
+    ([LINHA, {**SISTEMA, "Assignment": "E1MCLNT010", "System": "E1MCLNT010"}], "E1PCLNT010"),
+    ([LINHA, {**SISTEMA, "Provisioning Action": "Assign"}], "Provisioning Action"),
+    ([LINHA, {**SISTEMA, "Valid To": "01.01.2027"}], "Valid To"),
 ])
 def test_grade_divergente(linhas, trecho):
     erros = conferir_grade(linhas, C, "ZBRCOORD")

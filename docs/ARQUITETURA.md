@@ -171,10 +171,14 @@ com o formulário já pronto, imediatamente antes do Submit). É a **única escr
 3. Functional Area `EP- BRAZIL` e User Group Name `BR-TEP`. Têm de vir **antes** do Add (senão: *Enter the value of Functional
    Area before adding roles*).
 4. Aba *User Access* › Add › **Role** › *Select Roles*: Role Type `Business Role` (o ZBR é uma Business Role), Role / Profile
-   Name = ZBR › Search › exatamente 1 resultado › seta Add › OK. A grade fica com **1 linha**: Assignment = ZBR, Type
-   `Business Role`, Valid To 31.12.9999, Provisioning Action `Assign`.
-5. Conferência antes do Submit: cabeçalho (tipo, IGG, área, grupo, descrição) e grade (1 linha, ZBR, tipo, ação, validade) contra o
-   esperado; qualquer divergência barra (`RequestBarrada`). Print do formulário preenchido vai para o relatório.
+   Name = ZBR › Search › exatamente 1 resultado › seta Add › OK. A linha do ZBR: Assignment = ZBR, Type `Business Role`,
+   Valid To 31.12.9999, Provisioning Action `Assign`.
+4a. **Acesso ao sistema** (corrigido em 26/11/2026; a request 681959 saiu só com o ZBR e o usuário ficou sem acesso ao E1P):
+   Add › **System** › *Select Systems*: System = `E1PCLNT010` › Go › exatamente 1 linha › seta Add › OK. Segunda linha da grade:
+   Assignment = System = `E1PCLNT010`, Type `System`, Valid To 30.12.9999, sem approver, Provisioning Action
+   `Change & Unlock User` (igual à request 680271 feita à mão). Config: `ConfigGrcRequest.sistema/tipo_sistema/acao_sistema`.
+5. Conferência antes do Submit: cabeçalho (tipo, IGG, área, grupo, descrição) e grade (**2 linhas**: ZBR e sistema E1P; tipo, ação,
+   validade) contra o esperado; qualquer divergência barra (`RequestBarrada`). Print do formulário preenchido vai para o relatório.
 6. Submit (único clique do projeto): sucesso só com a mensagem `the request number is N`; erro de validação (*Enter the value for
    ...*) vira aviso; Submit **sem** confirmação (`SubmitSemConfirmacao`) **nunca é repetido** (a request pode existir: conferir
    no Request Status) e o relatório avisa em destaque.
