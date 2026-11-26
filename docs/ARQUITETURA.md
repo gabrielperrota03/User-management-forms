@@ -13,8 +13,8 @@ vigia ligada no logon do Windows.
 
 Alguém preenche o Forms pedindo a **criação** de um usuário (IGG novo + usuário de referência) ou a **modificação** de um IGG
 existente com uma ou mais **transações** (ex.: `FB01`). A criação **não pede transações**: o perfil é o ZBR da referência e o
-o e-mail sai como `PARA CRIAR` (sem simulação de risco). **Por enquanto a criação não abre request no GRC** (`request.ligada: false`,
-analista, 25/11/2026): nem a request nem o ensaio do formulário; o e-mail é só o aviso e a request é aberta à mão com o ZBR indicado. Para cada resposta a aplicação:
+o e-mail sai como `PARA CRIAR` (sem simulação de risco). **A criação abre o GRC** (`request.ligada: true`, religada em 26/11/2026 depois de
+um dia desligada): em dry-run só ensaia o formulário, e o Submit exige `--executar`. Com `ligada: false` o e-mail é só o aviso. Para cada resposta a aplicação:
 
 1. **Valida** a resposta (formato do IGG, das transações, remetente da organização, IGG protegido).
 2. **Criação: confere no E1P (somente leitura, `BAPI_USER_GET_DETAIL` por RFC; SU01D por SAP GUI só com `sap.modo_usuario: gui`)** se o usuário existe: se **já existe** → **não cria nada**, avisa no relatório
@@ -157,9 +157,8 @@ em qualquer candidata; o assunto do email ganha `CONFLITO`. A aplicação **reco
 
 ## 7. Request de criação no GRC (`grc_request.py`)
 
-> **Desligada por enquanto** (`request.ligada: false` no config, 25/11/2026): a rotina não abre o GRC na criação, nem em dry-run;
-> o resultado é `AcaoRequest.DESLIGADA` e o e-mail diz que a request não foi aberta. O que segue descreve o comportamento com
-> `request.ligada: true`.
+> **Ligada** (`request.ligada: true`, padrão desde 26/11/2026). Com `false` a rotina não abre o GRC na criação, nem em dry-run: o
+> resultado é `AcaoRequest.DESLIGADA` e o e-mail diz que a request não foi aberta (esteve assim em 25/11/2026).
 
 Só quando **tipo = Criação** e o usuário **não existe** no E1P (SU01D lida no início, de novo antes de decidir e uma terceira vez
 com o formulário já pronto, imediatamente antes do Submit). É a **única escrita** da aplicação no GRC.

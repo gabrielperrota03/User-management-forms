@@ -15,6 +15,22 @@ solicitante vem do login (`responder`), sem campo. Ele **ramifica por seção**:
 | | Transações | sim | uma ou várias, separadas por vírgula, `;` ou linha; máx. 10 |
 | | Justificativa | sim | — |
 
+### Formulário bilíngue (PT / EN, 26/11/2026)
+
+Um formulário só, com o texto em **português e inglês na mesma linha** (decisão do analista; alternativas descartadas: formulário
+dedicado em inglês, que duplicaria IDs de pergunta e fluxo, e seleção de idioma com seções duplicadas):
+
+- título e descrição do formulário (português, depois inglês no parágrafo seguinte) e a mensagem de agradecimento;
+- títulos das perguntas e das seções: `Tipo de solicitação / Request type`, `Criação de usuário / User creation`,
+  `Modificação de acesso / Access modification`, `IGG do usuário / User IGG`, `Usuário de referência (IGG) / Reference user (IGG)`,
+  `Justificativa / Justification`, `Transações / Transactions`;
+- subtítulos: o texto em português que já existia, uma quebra de linha e a tradução (a pergunta 7 mantém o negrito do `OBS:` e ganha o `NOTE:`);
+- opções da pergunta 1: `Criação de usuário / User creation` e `Modificação de acesso / Access modification`.
+
+Como mexer só em texto não muda os IDs das perguntas, o fluxo do Power Automate e o `CHAVES` do `resposta.py` não mudam. O tipo é lido
+pelo começo do texto (`ler_tipo`: "cria"/"creat" e "modif"), então **o português deve vir primeiro** na opção (e mesmo o inglês primeiro
+funciona). Os e-mails de relatório continuam em português (só o analista os recebe).
+
 **A criação não pede transações**: o perfil é o ZBR do usuário de referência. Sem transações não há o que simular: o relatório
 sai com a situação `SEM ANÁLISE` e a request de criação segue as demais guardas (ver `docs/ARQUITETURA.md`).
 

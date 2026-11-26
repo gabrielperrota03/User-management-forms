@@ -228,3 +228,27 @@ def test_request_criada_aparece_na_situacao_e_no_texto():
     res, *_ = _rodar_com({"L7654321": UsuarioSap(True)}, {"L7654321": ("ZBRCOORD",)}, request_grc=True)
     assert res.acao_request is AcaoRequest.CRIAR
     assert relatorio.situacao(res) == "REQUEST CRIADA" and "Request de criação criada" in relatorio.montar_html(res, [], AGORA)
+
+
+@pytest.mark.parametrize("texto,tipo", [
+    ("Criação de usuário / User creation", Tipo.CRIACAO), ("Modificação de acesso / Access modification", Tipo.MODIFICACAO),
+    ("Criação de usuário", Tipo.CRIACAO), ("Modificação de acesso", Tipo.MODIFICACAO),
+    ("User creation / Criação de usuário", Tipo.CRIACAO), ("Access modification", Tipo.MODIFICACAO),
+    ("  CRIAÇÃO DE USUÁRIO / USER CREATION ", Tipo.CRIACAO)])
+def test_tipo_no_forms_bilingue(texto, tipo):
+    from gestao_usuarios.resposta import ler_tipo
+    assert ler_tipo(texto) is tipo
+
+
+def test_resposta_crua_do_forms_bilingue():
+    s = de_dict({**CRUA_CRIACAO, "re72ac6907e2d4cab8bdfd5be73b385db": "Criação de usuário / User creation"}, "a.json")
+    assert s.tipo is Tipo.CRIACAO and s.igg == "L1234567"
+    m = de_dict({**CRUA_MODIFICACAO, "re72ac6907e2d4cab8bdfd5be73b385db": "Modificação de acesso / Access modification"}, "a.json")
+    assert m.tipo is Tipo.MODIFICACAO and m.transacoes == ("FB01", "FB02")
+
+
+def test_tipo_desconhecido_continua_recusado():
+    from gestao_usuarios.resposta import RespostaInvalida, ler_tipo
+    for ruim in ("", "outro", None, "Deletion / Exclusão"):
+        with pytest.raises(RespostaInvalida):
+            ler_tipo(ruim)

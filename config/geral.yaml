@@ -74,7 +74,7 @@ o97:
   connector: 'E1PCLNT010'
 
 request:
-  ligada: false                      # criação: false = só o e-mail de aviso, sem request nem ensaio no GRC (analista, 25/11/2026)
+  ligada: true                       # criação: true = abre o GRC (dry-run: ensaio do formulário; --executar: Submit); false = só o e-mail de aviso (analista, 26/11/2026: voltou a ligar)
   max_por_rodada: 3                  # disjuntor
   bloquear_com_conflito: true        # a confirmar com o analista
 

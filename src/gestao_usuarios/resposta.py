@@ -38,9 +38,9 @@ def _sem_acento(texto: str) -> str:
 
 def ler_tipo(texto) -> Tipo:
     t = _sem_acento(texto if isinstance(texto, str) else "").strip().lower()
-    if t.startswith("cria"):
+    if t.startswith(("cria", "creat", "user creat")):       # o Forms é bilíngue: "Criação de usuário / User creation"
         return Tipo.CRIACAO
-    if t.startswith("modif"):
+    if t.startswith(("modif", "access modif")):
         return Tipo.MODIFICACAO
     raise RespostaInvalida(f"tipo de solicitação desconhecido: {texto!r}")
 

@@ -3,6 +3,11 @@
 Copie o bloco abaixo inteiro no Claude Cowork. Os títulos das perguntas e os textos das opções precisam ficar **exatamente**
 como estão: o fluxo do Power Automate e o `resposta.py` dependem deles (ver `docs/forms-e-fluxos.md`).
 
+> **O formulário é bilíngue (PT / EN, 26/11/2026):** todo título, subtítulo, opção de resposta e título de seção leva o português e o
+> inglês juntos, "Português / English" (ex.: `Tipo de solicitação / Request type`; opções `Criação de usuário / User creation` e
+> `Modificação de acesso / Access modification`; subtítulos com o português, uma quebra de linha e a tradução). O português vem
+> primeiro porque o código lê o tipo pelo começo do texto. Detalhes em `docs/forms-e-fluxos.md`, seção 1.
+>
 > O formulário real já foi montado à mão com este desenho. Este prompt serve para **recriá-lo**; como o Forms dá IDs novos às
 > perguntas, depois de recriar é preciso atualizar `CHAVES` em `resposta.py` (ver "Chaves da resposta" em `docs/forms-e-fluxos.md`).
 
